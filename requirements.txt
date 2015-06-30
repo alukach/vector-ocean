@@ -1,0 +1,3 @@
+Fiona==1.5.1
+rasterio==0.24.0
+Wand==0.4.0
