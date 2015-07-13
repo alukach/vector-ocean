@@ -124,6 +124,8 @@ Simplify to remove pixelization
 gdal_polygonize.py subset.tif_hilshade_monochrome_combined.tif -f GeoJSON subset.tif_hilshade_monochrome_combined.tif_polygons.geojson
 ```
 
+![Polygonized Data viewed in QGIS](imgs/polygonized.png)
+
 _Note: Should we then dissolve/aggregate polygons between subsets that share borders? [[1]](http://gis.stackexchange.com/questions/85028/dissolve-aggregate-polygons-with-ogr2ogr-or-gpc)_
 
 ## II. Generate Tiles
