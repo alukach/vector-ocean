@@ -58,8 +58,8 @@ Convenience function to find right hillshade level using GDAL.
 ``` bash
 # example usage: hillshade subset.tif .1
 hillshade () {
-    echo "gdaldem -co compress=lzw hillshade -compute_edges -z $1 $2 $1_hilshade_$2.tif";
-    gdaldem hillshade -co compress=lzw -compute_edges -z $1 $2 $1_hilshade_$2.tif;
+    echo "gdaldem -co compress=lzw hillshade -compute_edges -z $1 $2 $1_hillshade_$2.tif";
+    gdaldem hillshade -co compress=lzw -compute_edges -z $1 $2 $1_hillshade_$2.tif;
 }
 ```
 
@@ -92,11 +92,11 @@ This command will likely some `Unknown field with tag ...` warnings during runti
 To get a visualization of the output, merge the images into a single image:
 
 ``` bash
-convert subset.tif_hilshade_.0001.tif_monochrome_* -evaluate-sequence mean subset.tif_hilshade_monochrome_combined.gif
+convert subset.tif_hillshade_.0001.tif_monochrome_* -evaluate-sequence mean subset.tif_hillshade_monochrome_combined.gif
 
 ```
 
-![merged monochrome](imgs/subset.tif_hilshade_monochrome_combined.gif)
+![merged monochrome](imgs/subset.tif_hillshade_monochrome_combined.gif)
 
 Oddly, this command failed when attempting to create a TIFF. Instead, I created a GIF output (I initially used JPEG, but opted for GIF due to smaller filesize and no-artifacts).
 
@@ -106,13 +106,15 @@ Oddly, this command failed when attempting to create a TIFF. Instead, I created 
 This can then be converted to TIFF via:
 
 ``` bash
-convert subset.tif_hilshade_monochrome_combined.gif subset.tif_hilshade_monochrome_combined.tif
+convert subset.tif_hillshade_monochrome_combined.gif subset.tif_hillshade_monochrome_combined.tif
 ```
 
 #### 5c. Re-apply geodata
 
+Since ImageMagick stripped the imagery of its geospatial attributes, we'll need to reapply them somehow. Luckily, GDAL knows to look for a matching .tfw if it sees a TIFF that isn’t internally georeferenced. Since we haven't actually changed any spatial information regarding the imagery, we can take the spatial information from the original `subset.tiff` and name it to match the new `subset.tif_hillshade_monochrome_combined.tfw`:
+
 ``` bash
-listgeo -tfw subset.tif && mv subset.tfw subset.tif_hilshade_monochrome_combined.tfw
+listgeo -tfw subset.tif && mv subset.tfw subset.tif_hillshade_monochrome_combined.tfw
 ```
 
 
@@ -121,7 +123,7 @@ listgeo -tfw subset.tif && mv subset.tfw subset.tif_hilshade_monochrome_combined
 Simplify to remove pixelization
 
 ``` bash
-gdal_polygonize.py subset.tif_hilshade_monochrome_combined.tif -f GeoJSON subset.tif_hilshade_monochrome_combined.tif_polygons.geojson
+gdal_polygonize.py subset.tif_hillshade_monochrome_combined.tif -f GeoJSON subset.tif_hillshade_monochrome_combined.tif_polygons.geojson
 ```
 
 ![Polygonized Data viewed in QGIS](imgs/polygonized.png)
@@ -132,6 +134,12 @@ _Note: Should we then dissolve/aggregate polygons between subsets that share bor
 
 
 
+
+## Notes
+
+### Resources
+
+[Mapbox: Processing Landsat 8 Using Open-Source Tools](https://www.mapbox.com/blog/processing-landsat-8/)
 
 _Note: Gridded output of images were created with:_
 
