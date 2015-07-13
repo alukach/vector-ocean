@@ -1,4 +1,4 @@
-# Generating a Ocean Vector Terrain tile source
+# Generating an Ocean Vector Terrain tile source
 
 Based off of Mapbox' [Global Vector Terrain slide deck](https://speakerdeck.com/mapbox/global-vector-terrain).
 
