@@ -53,29 +53,29 @@ gdal_translate -projwin -90 32 -78 24 data/GEBCO_2014_1D.nc output/subset.tif -o
 
 ### 4. Hillshade
 
-Convenience function to find right hillshade level using GDAL.
+Convenience function to help experiment with finding the right hillshade level using GDAL.
 
 ``` bash
 # example usage: hillshade subset.tif .1
 hillshade () {
-    echo "gdaldem -co compress=lzw hillshade -compute_edges -z $1 $2 $1_hillshade_$2.tif";
-    gdaldem hillshade -co compress=lzw -compute_edges -z $1 $2 $1_hillshade_$2.tif;
+    echo "gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif";
+    gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif;
 }
 ```
 
 Using `-co compress=lzw` and `-compute` to [compress the TIFF and avoid black pixel border around the edge of the image](https://www.mapbox.com/tilemill/docs/guides/terrain-data/#creating-hillshades), respectively.
 
-![Hillshade Tests](imgs/hillshade_montage.png)
+![Hillshade Tests](imgs/hillshade_montage.jpg)
 
-At first blush, it appears that a vertical exaggeration somewhere between `.0003` and `.0010` best illustrates the elevation model (looking at the inland regions) but notice that much of the coastal region (such as the [Viosca Knoll area](http://soundwaves.usgs.gov/2011/03/DeepF1sm2LG.jpg)) lies within shadows. It is important to ensure that variation amongst features is not obscured. Bringing out subtle variances can be done with well-chosen thresholds during the conversion to monochrome levels.
+At first blush, it appears that a vertical exaggeration at `0.001` best illustrates the elevation model (looking at the inland regions) but notice that much of the coastal region (such as the [Viosca Knoll area](http://soundwaves.usgs.gov/2011/03/DeepF1sm2LG.jpg)) lies within shadows. It is important to ensure that variation amongst features is not obscured. Bringing out subtle variances can be done with well-chosen thresholds during the conversion to monochrome levels.
+
+_Idea: Adjust altitude as zoom level surpasses natural resolution to minimize objects entirely within shade_
 
 ### 5. Convert to Monochrome Levels
 
 You're going to want to produce ~4 monochromatic layers representing varying depths. To do so, we'll use ImageMagick's [threshold](http://www.imagemagick.org/script/command-line-options.php#threshold) utility.
 
 #### 5a. Threshold
-
-I started with an equally distributed range of thresholds (`20 40 60 80`), and fine-tuned from there based on aesthetics. A lot can be gained from spending some time experimenting with varying thresholds. Initially, almost all inland mountains we limited to being only illustrated by their peaks. Eventually, I found that a threshold of `75` illustrated plenty of the inland features.
 
 ``` bash
 # example usage: monochrome subset.tif 50%
@@ -87,13 +87,17 @@ monochrome () {
 
 This command will likely some `Unknown field with tag ...` warnings during runtime. This is due to ImageMagick is not geo-aware. As such, geo fields are not copied to the new images produced. We'll reapply this data later.
 
+![Monochrome Tests](imgs/monochrome_montage.jpg)
+
+I started with an equally distributed range of thresholds (`20 40 60 80`), and fine-tuned from there based on aesthetics. A lot can be gained from spending some time experimenting with varying thresholds. Initially, almost all inland mountains we limited to being only illustrated by their peaks. Eventually, I found that a threshold of `75` illustrated plenty of the inland features.
+
+
 #### 5b. Merge
 
 To get a visualization of the output, merge the images into a single image:
 
 ``` bash
 convert subset.tif_hillshade_.0001.tif_monochrome_* -evaluate-sequence mean subset.tif_hillshade_monochrome_combined.gif
-
 ```
 
 ![merged monochrome](imgs/subset.tif_hillshade_monochrome_combined.gif)
@@ -145,4 +149,15 @@ _Note: Gridded output of images were created with:_
 
 ``` bash
 montage -label '%f' subset.tif_hillshade_* -tile 2x -geometry '480x320' montage.jpg
+```
+
+_Advanced labeling:_
+
+``` bash
+unset arguments
+for f in subset.tif_hillshade_.0001.tif_monochrome_*; do
+    var=${f#*_*_*_*_} var=${var%%.*};
+    arguments+=(-label "Threshold: $var" "$f");
+done
+montage "${arguments[@]}" -tile 2x -geometry 480 ../../imgs/monochrome_montage.jpg
 ```
