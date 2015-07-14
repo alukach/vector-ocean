@@ -32,11 +32,13 @@ Being that dialing-in the correct clipping buffer will depend on the rendering r
 
 ### 1. Sourcing Data
 
-Download GEBCO data...
+Download [GEBCO 30 arc-second grid data](http://www.gebco.net/data_and_products/gridded_bathymetry_data/gebco_30_second_grid/).
 
-_TODO: Fill this in_
+The GEBCO 30 arc-second dataset stores data in a 30 arc-second (1/120 degree or 1/2 arcminute) grid. Depth is stored in meters.
 
+About arc-second data:
 
+> At the equator, an arc-second of longitude approximately equals an arc-second of latitude, which is 1/60th of a nautical mile (or 101.27 feet or 30.87 meters). Arc-seconds of latitude remain nearly constant, while arc-seconds of longitude decrease in a trigonometric cosine-based fashion as one moves toward the earth's poles. - [_Source: ArcUser Online - Measuring in Arc-Seconds_](http://www.esri.com/news/arcuser/0400/wdside.html)
 
 ### 2. Downsample
 
@@ -53,13 +55,26 @@ gdal_translate -projwin -90 32 -78 24 data/GEBCO_2014_1D.nc output/subset.tif -o
 
 ### 4. Hillshade
 
+To produce hillshade data, we will be utilizing the [`gdaldem`](http://www.gdal.org/gdaldem.html) command.
+
+#### A word about scale...
+
+Since the `X` and `Y` values are in 30 arc-seconds (1/120 degree) and the `Z` values are in meters, we will have to use the `scale` flag.
+
+From the `gdaldem` docs:
+
+> gdaldem generally assumes that x, y and z units are identical.  If x (east-west) and y (north-south) units are identical, but z (elevation) units are different, the scale (-s) option can be used to set the ratio of vertical units to horizontal.  **For LatLong projections near the equator, where units of latitude and units of longitude are similar, elevation (z) units can be converted to be compatible by using scale=370400 (if elevation is in feet) or scale=111120 (if elevation is in meters)**.  For locations not near the equator, it would be best to reproject your grid using gdalwarp before using gdaldem.
+
+Being that our units are in 1/120 degrees, our scale should be ~~`926` (`111120 / 120`)~~. [TODO: Read link](http://gis.stackexchange.com/questions/95337/scale-and-z-factor-have-no-effect-on-hillshade-analysis-in-qgis).
+
+
 Convenience function to help experiment with finding the right hillshade level using GDAL.
 
 ``` bash
 # example usage: hillshade subset.tif .1
 hillshade () {
-    echo "gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif";
-    gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif;
+    echo "gdaldem hillshade -co compress=lzw -compute_edges -s 926 -z $2 $1 $1_hillshade_$2.tif";
+    gdaldem hillshade -co compress=lzw -compute_edges -s 926 -z $2 $1 $1_hillshade_$2.tif;
 }
 ```
 
