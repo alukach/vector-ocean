@@ -1,6 +1,6 @@
 # Generating an Ocean Vector Terrain tile source
 
-Based off of Mapbox' [Global Vector Terrain slide deck](https://speakerdeck.com/mapbox/global-vector-terrain).
+Mapbox has an amazing [Mapbox Terrain](https://www.mapbox.com/developers/vector-tiles/mapbox-terrain/) vector tile source.  Unfortunately, the tiles seem devoid of any ocean data, leaving 71% of the earth somewhat barren.  This is an experiment in generating our own set of vector tiles from the [GEBCO](http://www.gebco.net) gridded bathymetric data sets. Much of this is based off of the [Global Vector Terrain slide deck](https://speakerdeck.com/mapbox/global-vector-terrain) presented by @ajashton of Mapbox at NACIS 2014 Practical Cartography Day. While the particular dataset we'll be using isn't especially massive, we'll do our best to design this process to be robust enough to handle much larger quantities of data. This largely translates into breaking the data up and processing it in a distributed fashion, as mentioned in the NACIS slides.
 
 One thing that was not initially clear was how to handle features that span multiple tiles. Should we clip features that span multiple tiles? If so, does the [vector tile spec](https://github.com/mapbox/vector-tile-spec) differentiate between features that are clipped vs features that naturally end at the boundary of the tile? Is only the boundary of the polygon included, or are extra lines at the tile boundary added to "close" the polygon within the tile?  There are multiple issues regarding this topic ([4](https://github.com/mapbox/vector-tile-spec/issues/4), [8](https://github.com/mapbox/vector-tile-spec/issues/8), [26](https://github.com/mapbox/vector-tile-spec/issues/26)), but the best summary for how Mapbox handles this comes from @pramsey's [comment](https://github.com/mapbox/vector-tile-spec/issues/26#issuecomment-63902337):
 
@@ -30,28 +30,37 @@ Being that dialing-in the correct clipping buffer will depend on the rendering r
 1. Convert to Monochrome Levels
 1. Polygonize / Load into DB
 
-### 1. Sourcing Data
+### 1. Sourcing & Preparing Data
 
-Download [GEBCO 30 arc-second grid data](http://www.gebco.net/data_and_products/gridded_bathymetry_data/gebco_30_second_grid/).
+First and foremost, we need some data. As mentioned above, we'll be using a GEBCO dataset. There are multiple offerings, but at the time of writing the highest-resolution data offered by GEBCO is the [GEBCO 30 arc-second grid data](http://www.gebco.net/data_and_products/gridded_bathymetry_data/gebco_30_second_grid/). It is available for download free from their website.
 
-The GEBCO 30 arc-second dataset stores data in a 30 arc-second (1/120 degree or 1/2 arcminute) grid. Depth is stored in meters.
+As you'd guess from the name, the GEBCO 30 arc-second dataset stores data in a 30 arc-second (1/120 degree or 1/2 arcminute) grid. Depth is stored in meters.
 
 About arc-second data:
 
 > At the equator, an arc-second of longitude approximately equals an arc-second of latitude, which is 1/60th of a nautical mile (or 101.27 feet or 30.87 meters). Arc-seconds of latitude remain nearly constant, while arc-seconds of longitude decrease in a trigonometric cosine-based fashion as one moves toward the earth's poles. - [_Source: ArcUser Online - Measuring in Arc-Seconds_](http://www.esri.com/news/arcuser/0400/wdside.html)
 
+The data arrives in EPSG:4326 (WGS84). We'll need to get it in EPSG:3857 (for more information on the differences, see [here](http://gis.stackexchange.com/questions/48949/epsg-3857-or-4326-for-googlemaps-openstreetmap-and-leaflet)). Since the file isn't too large (~1.5GB) we can go ahead and convert it before we get started. While we're at it, we may as well convert the data from NetCDF to a geotiff. This will allow us to interact with the data through ImageMagick. As mentioned mention in [Mapbox' Working with GeoTIFFs documentation](https://www.mapbox.com/tilemill/docs/guides/reprojecting-geotiff/) we'll clip the data to web mercator extents and use the Lanczos resampling method for hopefully a high quality output. For more information on Lanczos, see [this excellent StackExchange answer](http://gis.stackexchange.com/questions/10931/what-is-lanczos-resampling-useful-for-in-a-spatial-context#answer-14361).
+
+```bash
+gdalwarp -s_srs epsg:4326 -t_srs epsg:3857 -of GTIFF -te -20037508.34 -20037508.34 20037508.34 20037508.34 -r lanczos GEBCO_2014_1D.nc GEBCO_2014_1D_3857.tif
+```
+
+If the file were drastically larger, it might make sense to reproject after we subset our data. On a 2.4 GHz Intel Core i5 Retina MacbookPro with 8 GB RAM, this operation took just over 4 minutes.
+
 ### 2. Downsample
 
 
 
-### 3. Subset data
+### 3. Subset Data
 
-http://gis.stackexchange.com/questions/34795/how-to-use-gdal-utilities-to-subset-from-a-raster
+To break the dataset up into separate 1024px x 1024px slices to be processed by different workers, we'll need to subset the data. This is a pretty straightforward operation:
 
 ```bash
-gdal_translate -projwin -90 32 -78 24 data/GEBCO_2014_1D.nc output/subset.tif -of GTIFF
+gdal_translate -srcwin 7200 11800 1024 1024 -of GTIFF data/GEBCO_2014_1D_3857.tif output/subset.tif
 ```
 
+For the purpose of dialing in other commands, we'll experiment with a slice of the Florida / Gulf of Mexico area. This area provides a variety of surfacetypes to visualize.
 
 ### 4. Hillshade
 
@@ -68,13 +77,13 @@ From the `gdaldem` docs:
 Being that our units are in 1/120 degrees, our scale should be ~~`926` (`111120 / 120`)~~. [TODO: Read link](http://gis.stackexchange.com/questions/95337/scale-and-z-factor-have-no-effect-on-hillshade-analysis-in-qgis).
 
 
-Convenience function to help experiment with finding the right hillshade level using GDAL.
+Convenience function to help experiment with finding the right hillshade level using GDAL:
 
 ``` bash
 # example usage: hillshade subset.tif .1
 hillshade () {
     echo "gdaldem hillshade -co compress=lzw -compute_edges -s 926 -z $2 $1 $1_hillshade_$2.tif";
-    gdaldem hillshade -co compress=lzw -compute_edges -s 926 -z $2 $1 $1_hillshade_$2.tif;
+    gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif;
 }
 ```
 
@@ -139,7 +148,7 @@ listgeo -tfw subset.tif && mv subset.tfw subset.tif_hillshade_monochrome_combine
 
 ### 6. Polygonize / Load into DB
 
-Simplify to remove pixelization
+Simplify to remove pixelization:
 
 ``` bash
 gdal_polygonize.py subset.tif_hillshade_monochrome_combined.tif -f GeoJSON subset.tif_hillshade_monochrome_combined.tif_polygons.geojson
