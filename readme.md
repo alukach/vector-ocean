@@ -40,10 +40,14 @@ About arc-second data:
 
 > At the equator, an arc-second of longitude approximately equals an arc-second of latitude, which is 1/60th of a nautical mile (or 101.27 feet or 30.87 meters). Arc-seconds of latitude remain nearly constant, while arc-seconds of longitude decrease in a trigonometric cosine-based fashion as one moves toward the earth's poles. - [_Source: ArcUser Online - Measuring in Arc-Seconds_](http://www.esri.com/news/arcuser/0400/wdside.html)
 
-The data arrives in EPSG:4326 (WGS84). We'll need to get it in EPSG:3857 (for more information on the differences, see [here](http://gis.stackexchange.com/questions/48949/epsg-3857-or-4326-for-googlemaps-openstreetmap-and-leaflet)). Since the file isn't too large (~1.5GB) we can go ahead and convert it before we get started. While we're at it, we may as well convert the data from NetCDF to a geotiff. This will allow us to interact with the data through ImageMagick. As mentioned mention in [Mapbox' Working with GeoTIFFs documentation](https://www.mapbox.com/tilemill/docs/guides/reprojecting-geotiff/) we'll clip the data to web mercator extents and use the Lanczos resampling method for hopefully a high quality output. For more information on Lanczos, see [this excellent StackExchange answer](http://gis.stackexchange.com/questions/10931/what-is-lanczos-resampling-useful-for-in-a-spatial-context#answer-14361).
+The data arrives in EPSG:4326 (WGS84). We'll need to get it in EPSG:3857 (for more information on the differences, see [here](http://gis.stackexchange.com/questions/48949/epsg-3857-or-4326-for-googlemaps-openstreetmap-and-leaflet)). Since the file isn't too large (~1.5GB) we can go ahead and convert it before we get started. While we're at it, we may as well convert the data from NetCDF to a geotiff. This will allow us to interact with the data through ImageMagick. As mentioned mention in [Mapbox' Working with GeoTIFFs documentation](https://www.mapbox.com/tilemill/docs/guides/reprojecting-geotiff/) we'll clip the data to web mercator extents. Originally, I had planned on using the [Lanczos](http://gis.stackexchange.com/questions/10931/what-is-lanczos-resampling-useful-for-in-a-spatial-context#answer-14361) resampling method hoping for a higher quality output (as recommended in Mapbox' GeoTIFFs documentation), but found that it exaggerated linear artifacts in the data:
+
+![linear artifacts](/imgs/resampling_montage.jpg)
+
+In the end, `bilinear` and `cubic` seemed to produce the most appealing output. I opted to go with `cubic`:
 
 ```bash
-gdalwarp -s_srs epsg:4326 -t_srs epsg:3857 -of GTIFF -te -20037508.34 -20037508.34 20037508.34 20037508.34 -r lanczos GEBCO_2014_1D.nc GEBCO_2014_1D_3857.tif
+gdalwarp -s_srs epsg:4326 -t_srs epsg:3857 -of GTIFF -te -20037508.34 -20037508.34 20037508.34 20037508.34 -r cubic data/GEBCO_2014_1D.nc data/GEBCO_2014_1D_3857.tif
 ```
 
 If the file were drastically larger, it might make sense to reproject after we subset our data. On a 2.4 GHz Intel Core i5 Retina MacbookPro with 8 GB RAM, this operation took just over 4 minutes.
@@ -68,30 +72,39 @@ To produce hillshade data, we will be utilizing the [`gdaldem`](http://www.gdal.
 
 #### A word about scale...
 
-Since the `X` and `Y` values are in 30 arc-seconds (1/120 degree) and the `Z` values are in meters, we will have to use the `scale` flag.
-
-From the `gdaldem` docs:
-
-> gdaldem generally assumes that x, y and z units are identical.  If x (east-west) and y (north-south) units are identical, but z (elevation) units are different, the scale (-s) option can be used to set the ratio of vertical units to horizontal.  **For LatLong projections near the equator, where units of latitude and units of longitude are similar, elevation (z) units can be converted to be compatible by using scale=370400 (if elevation is in feet) or scale=111120 (if elevation is in meters)**.  For locations not near the equator, it would be best to reproject your grid using gdalwarp before using gdaldem.
-
-Being that our units are in 1/120 degrees, our scale should be ~~`926` (`111120 / 120`)~~. [TODO: Read link](http://gis.stackexchange.com/questions/95337/scale-and-z-factor-have-no-effect-on-hillshade-analysis-in-qgis).
-
+We'll have to adjust the vertical exaggeration as our data moves away from the equator. _TODO: More about this_
 
 Convenience function to help experiment with finding the right hillshade level using GDAL:
 
 ``` bash
-# example usage: hillshade subset.tif .1
+rm output/subset.tif_hillshade_*
+
+# example usage: hillshade subset.tif 2
 hillshade () {
-    echo "gdaldem hillshade -co compress=lzw -compute_edges -s 926 -z $2 $1 $1_hillshade_$2.tif";
+    echo "gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif";
     gdaldem hillshade -co compress=lzw -compute_edges -z $2 $1 $1_hillshade_$2.tif;
 }
+for i in $(seq 02 19);
+    do hillshade output/subset.tif $(($i * 2));
+done
+
+# Compose montage
+unset arguments;
+for f in output/subset.tif_hillshade_*; do
+    var=${f#*_*_*} var=${var%%.*};
+    arguments+=(-label "Vertical Exaggeration: $var" "$f");
+done
+montage "${arguments[@]}" -tile 2x -geometry 480 imgs/hillshade_montage.jpg
+
+# View output
+open imgs/hillshade_montage.jpg
 ```
 
 Using `-co compress=lzw` and `-compute` to [compress the TIFF and avoid black pixel border around the edge of the image](https://www.mapbox.com/tilemill/docs/guides/terrain-data/#creating-hillshades), respectively.
 
 ![Hillshade Tests](imgs/hillshade_montage.jpg)
 
-At first blush, it appears that a vertical exaggeration at `0.001` best illustrates the elevation model (looking at the inland regions) but notice that much of the coastal region (such as the [Viosca Knoll area](http://soundwaves.usgs.gov/2011/03/DeepF1sm2LG.jpg)) lies within shadows. It is important to ensure that variation amongst features is not obscured. Bringing out subtle variances can be done with well-chosen thresholds during the conversion to monochrome levels.
+At first blush, it appears that a vertical exaggeration at `30` best illustrates the elevation model (looking at the inland regions) but notice that much of the coastal region (such as the [Viosca Knoll area](http://soundwaves.usgs.gov/2011/03/DeepF1sm2LG.jpg)) lies within shadows. It is important to ensure that variation amongst features is not obscured. Bringing out subtle variances can be done with well-chosen thresholds during the conversion to monochrome levels.
 
 _Idea: Adjust altitude as zoom level surpasses natural resolution to minimize objects entirely within shade_
 
@@ -102,11 +115,28 @@ You're going to want to produce ~4 monochromatic layers representing varying dep
 #### 5a. Threshold
 
 ``` bash
-# example usage: monochrome subset.tif 50%
+# Set chosen hillshade value
+hillshade_val=25;
+
+# Generate monochrome values
 monochrome () {
     echo "convert $1 -threshold $2% $1_monochrome_$2.tif";
     convert $1 -threshold $2% $1_monochrome_$2.tif;
 }
+for i in $(seq 02 19);
+    do monochrome output/subset.tif_hillshade_${hillshade_val}.tif $(($i * 5));
+done
+
+# Compose montage
+unset arguments;
+for f in output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_*; do
+    var=${f#*_*_*_*_} var=${var%%.*};
+    arguments+=(-label "Threshold: $var" "$f");
+done
+montage "${arguments[@]}" -tile 2x -geometry 480 imgs/monochrome_montage.jpg
+
+# View output
+open imgs/monochrome_montage.jpg
 ```
 
 This command will likely some `Unknown field with tag ...` warnings during runtime. This is due to ImageMagick is not geo-aware. As such, geo fields are not copied to the new images produced. We'll reapply this data later.
@@ -121,7 +151,13 @@ I started with an equally distributed range of thresholds (`20 40 60 80`), and f
 To get a visualization of the output, merge the images into a single image:
 
 ``` bash
-convert subset.tif_hillshade_.0001.tif_monochrome_* -evaluate-sequence mean subset.tif_hillshade_monochrome_combined.gif
+convert output/subset.tif_hillshade_25.tif_monochrome_30.tif \
+        output/subset.tif_hillshade_25.tif_monochrome_50.tif \
+        output/subset.tif_hillshade_25.tif_monochrome_70.tif \
+        output/subset.tif_hillshade_25.tif_monochrome_80.tif \
+        -evaluate-sequence mean \
+        imgs/subset.tif_hillshade_monochrome_combined.gif \
+&& open imgs/subset.tif_hillshade_monochrome_combined.gif
 ```
 
 ![merged monochrome](imgs/subset.tif_hillshade_monochrome_combined.gif)
