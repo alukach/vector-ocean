@@ -50,7 +50,7 @@ In the end, `bilinear` and `cubic` seemed to produce the most appealing output. 
 gdalwarp -s_srs epsg:4326 -t_srs epsg:3857 -of GTIFF -te -20037508.34 -20037508.34 20037508.34 20037508.34 -r cubic data/GEBCO_2014_1D.nc data/GEBCO_2014_1D_3857.tif
 ```
 
-If the file were drastically larger, it might make sense to reproject after we subset our data. On a 2.4 GHz Intel Core i5 Retina MacbookPro with 8 GB RAM, this operation took just over 4 minutes.
+If the file were drastically larger, it might make sense to reproject after we subset our data. On a 2.4 GHz Intel Core i5 Retina MacbookPro with 8 GB RAM, this operation took around 80 seconds.
 
 ### 2. Downsample
 
