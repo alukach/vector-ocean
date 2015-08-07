@@ -54,6 +54,72 @@ If the file were drastically larger, it might make sense to reproject after we s
 
 ### 2. Downsample
 
+From GDAL info, we can see that our image is `29136` x `29136`:
+
+```
+$ gdalinfo data/GEBCO_2014_1D_3857.tif
+Driver: GTiff/GeoTIFF
+Files: data/GEBCO_2014_1D_3857.tif
+Size is 29136, 29136
+Coordinate System is:
+PROJCS["WGS 84 / Pseudo-Mercator",
+    GEOGCS["WGS 84",
+        DATUM["WGS_1984",
+            SPHEROID["WGS 84",6378137,298.257223563,
+                AUTHORITY["EPSG","7030"]],
+            AUTHORITY["EPSG","6326"]],
+        PRIMEM["Greenwich",0],
+        UNIT["degree",0.0174532925199433],
+        AUTHORITY["EPSG","4326"]],
+    PROJECTION["Mercator_1SP"],
+    PARAMETER["central_meridian",0],
+    PARAMETER["scale_factor",1],
+    PARAMETER["false_easting",0],
+    PARAMETER["false_northing",0],
+    UNIT["metre",1,
+        AUTHORITY["EPSG","9001"]],
+    EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"],
+    AUTHORITY["EPSG","3857"]]
+Origin = (-20037508.339999999850988,20037508.339999999850988)
+Pixel Size = (1375.446755903349867,-1375.446755903349867)
+Metadata:
+  AREA_OR_POINT=Area
+Image Structure Metadata:
+  INTERLEAVE=BAND
+Corner Coordinates:
+Upper Left  (-20037508.340,20037508.340) (180d 0' 0.00"W, 85d 3' 4.06"N)
+Lower Left  (-20037508.340,-20037508.340) (180d 0' 0.00"W, 85d 3' 4.06"S)
+Upper Right (20037508.340,20037508.340) (180d 0' 0.00"E, 85d 3' 4.06"N)
+Lower Right (20037508.340,-20037508.340) (180d 0' 0.00"E, 85d 3' 4.06"S)
+Center      (   0.0000000,   0.0000000) (  0d 0' 0.01"E,  0d 0' 0.01"N)
+Band 1 Block=29136x1 Type=Int16, ColorInterp=Gray
+```
+
+Looking at the following table, we can see that our geotiff is just slightly smaller than the global width of zoom level 7:
+
+Zoom | Global Width (px) | # Tiles Wide
+---: | :---: | :---
+0 | 256 | 1
+1 | 512 | 2
+2 | 1024 | 4
+3 | 2048 | 8
+4 | 4096 | 16
+5 | 8192 | 32
+6 | 16384 | 64
+7 | 32768 | 128
+8 | 65536 | 256
+9 | 131072 | 512
+10 | 262144 | 1024
+11 | 524288 | 2048
+12 | 1048576 | 4096
+13 | 2097152 | 8192
+14 | 4194304 | 16384
+15 | 8388608 | 32768
+16 | 16777216 | 65536
+17 | 33554432 | 131072
+18 | 67108864 | 262144
+19 | 134217728 | 524288
+
 
 
 ### 3. Subset Data
@@ -61,10 +127,20 @@ If the file were drastically larger, it might make sense to reproject after we s
 To break the dataset up into separate 1024px x 1024px slices to be processed by different workers, we'll need to subset the data. This is a pretty straightforward operation:
 
 ```bash
-gdal_translate -srcwin 7200 11800 1024 1024 -of GTIFF data/GEBCO_2014_1D_3857.tif output/subset.tif
+gdal_translate -srcwin 7200 11800 1024 1024 -of GTIFF data/GEBCO_2014_1D_3857_cropped.tif output/subset.tif
 ```
 
-For the purpose of dialing in other commands, we'll experiment with a slice of the Florida / Gulf of Mexico area. This area provides a variety of surfacetypes to visualize.
+For the purpose of dialing in other commands, we'll experiment with a slice of the Florida / Gulf of Mexico area. This area provides a variety of surface types to visualize.
+
+#### Remove terrain data
+
+Mapbox already offers a great set of terrain data. We're not looking to replace that, only to add missing ocean data. To remove the terrain data from the GEBCO dataset, we'll clip it to only contain ocean data. We'll use the [Generalized Coastline dataset](http://openstreetmapdata.com/data/generalized-coastlines) from OSM to achieve this. The OSM Generalized Coastline dataset only goes up to zoom level 8, which actually appears about right for the resolution of the GEBCO 30 arc-second grid. If we were using higher-resolution data, something like the [Water Polygon dataset](http://openstreetmapdata.com/data/water-polygons) would likely be a better fit.
+
+Crop shapefile (takes ~18seconds):
+```bash
+ogr2ogr -f "ESRI Shapefile" output/cropped_coastline.shp data/water-polygons-generalized-3857/water_polygons_z8.shp -clipsrc 7200 11800 8224 12824
+gdalwarp -cutline output/cropped_coastline.shp output/subset.tif output/subset_cropped.tif
+```
 
 ### 4. Hillshade
 
@@ -116,7 +192,7 @@ You're going to want to produce ~4 monochromatic layers representing varying dep
 
 ``` bash
 # Set chosen hillshade value
-hillshade_val=25;
+hillshade_val=20;
 
 # Generate monochrome values
 monochrome () {
@@ -151,13 +227,14 @@ I started with an equally distributed range of thresholds (`20 40 60 80`), and f
 To get a visualization of the output, merge the images into a single image:
 
 ``` bash
-convert output/subset.tif_hillshade_25.tif_monochrome_30.tif \
-        output/subset.tif_hillshade_25.tif_monochrome_50.tif \
-        output/subset.tif_hillshade_25.tif_monochrome_70.tif \
-        output/subset.tif_hillshade_25.tif_monochrome_80.tif \
+hillshade_val=20;
+convert output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_30.tif \
+        output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_50.tif \
+        output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_70.tif \
+        output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_80.tif \
         -evaluate-sequence mean \
-        imgs/subset.tif_hillshade_monochrome_combined.gif \
-&& open imgs/subset.tif_hillshade_monochrome_combined.gif
+        output/subset.tif_hillshade_monochrome_combined.gif
+open output/subset.tif_hillshade_monochrome_combined.gif
 ```
 
 ![merged monochrome](imgs/subset.tif_hillshade_monochrome_combined.gif)
@@ -166,19 +243,14 @@ Oddly, this command failed when attempting to create a TIFF. Instead, I created 
 
 ![Artifacts](imgs/artifact_montage.png)
 
-
-This can then be converted to TIFF via:
-
-``` bash
-convert subset.tif_hillshade_monochrome_combined.gif subset.tif_hillshade_monochrome_combined.tif
-```
-
 #### 5c. Re-apply geodata
 
 Since ImageMagick stripped the imagery of its geospatial attributes, we'll need to reapply them somehow. Luckily, GDAL knows to look for a matching .tfw if it sees a TIFF that isn’t internally georeferenced. Since we haven't actually changed any spatial information regarding the imagery, we can take the spatial information from the original `subset.tiff` and name it to match the new `subset.tif_hillshade_monochrome_combined.tfw`:
 
 ``` bash
-listgeo -tfw subset.tif && mv subset.tfw subset.tif_hillshade_monochrome_combined.tfw
+listgeo -tfw output/subset.tif
+mv output/subset.tfw output/subset.tif_hillshade_monochrome_combined.tfw
+gdal_translate output/subset.tif_hillshade_monochrome_combined.gif output/subset.tif_hillshade_monochrome_combined.tif -a_srs EPSG:3857
 ```
 
 
@@ -187,7 +259,7 @@ listgeo -tfw subset.tif && mv subset.tfw subset.tif_hillshade_monochrome_combine
 Simplify to remove pixelization:
 
 ``` bash
-gdal_polygonize.py subset.tif_hillshade_monochrome_combined.tif -f GeoJSON subset.tif_hillshade_monochrome_combined.tif_polygons.geojson
+gdal_polygonize.py output/subset.tif_hillshade_monochrome_combined.tif -f GeoJSON output/subset.tif_hillshade_monochrome_combined.tif_polygons.geojson
 ```
 
 ![Polygonized Data viewed in QGIS](imgs/polygonized.png)
