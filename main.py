@@ -11,21 +11,27 @@ import rasterio
 devnull = open(os.devnull, 'w')
 
 
-def task(file_path, output_dir, col, row, src_width, src_height, clipfile_path=None, zoom=8, vert_exag=20, thresholds=(30, 50, 70, 80), verbosity=1):
+def task(file_path, output_dir, col, row, src_width, src_height, clipfile_path=None, zoom=8, vert_exag=20, thresholds=(30, 50, 70, 80),
+    verbosity=0, pause=False):
     """
+    General steps:
     - Subset file
     - Hillshade data
     - Monochrome data
     - Polygonize
     """
 
+    db_name = 'ocean-tiles'
+
     with tempfile.TemporaryDirectory() as tmpdir:
         overlap = float(2)
         num_rows = math.pow(2, zoom)
         width = overlap * src_width / num_rows
         height = overlap * src_height / num_rows
-        x = (col * width / overlap) - (1/overlap * width)
-        y = (row * height / overlap) - (1/overlap * height)
+        # TODO: If x or y is negative, handle getting selection from other
+        # side of image and joining.
+        x = (col * width / overlap) - (1/overlap * width/2)
+        y = (row * height / overlap) - (1/overlap * height/2)
 
         # Subset data
         subset_path = "{tmpdir}/{x}_{y}_subset.tif".format(x='%05d' % x, y='%05d' % y, tmpdir=tmpdir)
@@ -108,25 +114,21 @@ def task(file_path, output_dir, col, row, src_width, src_height, clipfile_path=N
 
         # Polygonize
         geojson_path = "{}.geojson".format(combined_tif_path)
-        cmd = "gdal_polygonize.py {input} -f GeoJSON {output}"
-        cmd = cmd.format(input=combined_tif_path, output=geojson_path)
+        cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {layer_name}"
+        cmd = cmd.format(input=combined_tif_path, db_name=db_name, layer_name=zoom)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=devnull, stderr=devnull)
 
-        # Mv to output
-        out_dir = "{base}/{z}/{x}".format(base=output_dir, z=zoom, x=col)
-        os.makedirs(out_dir, exist_ok=True)
-        cmd = "mv {input} {out_dir}/{y}.geojson".format(input=geojson_path, out_dir=out_dir, y=row)
-        if verbosity > 1:
-            print(cmd)
-        subprocess.check_call(cmd, shell=True, stdout=devnull, stderr=devnull)
-
-        print('.', end='\n' if verbosity > 1 else '.')
-        sys.stdout.flush()
+        if pause:
+            input(tmpdir + '\n')
+        if verbosity:
+            print('.', end='\n' if verbosity > 1 else '.')
+            sys.stdout.flush()
 
 
-def scheduler(file_path, output_dir, clipfile_path=None, tile_size=512):
+def scheduler(file_path, output_dir, verbosity, clipfile_path=None, pause=False):
+    # TODO: Use kwargs
     with rasterio.drivers():
         with rasterio.open(file_path) as src:
             width = src.width
@@ -137,14 +139,14 @@ def scheduler(file_path, output_dir, clipfile_path=None, tile_size=512):
         num_rows = int(math.pow(2, z))
         for col in range(0, num_rows):
             for row in range(0, num_rows):
-                kwargs = dict(
+                task(
                     file_path=file_path, output_dir=output_dir,
                     clipfile_path=clipfile_path,
                     col=col, row=row, zoom=z,
                     src_width=width, src_height=height,
-                    vert_exag=20, thresholds=(30, 50, 70, 80)
+                    vert_exag=20, thresholds=(30, 50, 70, 80),
+                    verbosity=verbosity, pause=pause
                 )
-                task(**kwargs)
 
 
 if __name__ == '__main__':
@@ -162,10 +164,32 @@ if __name__ == '__main__':
         metavar='CLIPFILE',
         help="Clipping Shapefile")
     parser.add_argument(
-        '--outdir',
+        '--verbose', '-v',
+        default=0,
+        action='count'
+    )
+    parser.add_argument(
+        '--pause', '-p',
+        action='store_true',
+        default=False,
+        help=('Pause after each tile is generated, before temporary '
+            'directory is removed. For development/testing purporses.')
+    )
+    parser.add_argument(
+        '--outdir', '-o',
         metavar='OUTPUT_DIR',
         default='./out',
         help="Output Directory")
 
     args = parser.parse_args()
-    scheduler(args.input, args.outdir, args.clipfile)
+    try:
+        scheduler(
+            file_path=args.input,
+            output_dir=args.outdir,
+            verbosity=args.verbose,
+            clipfile_path=args.clipfile,
+            pause=args.pause,
+        )
+    except KeyboardInterrupt:
+        print("Received exit signal, shutting down...")
+        sys.exit()
