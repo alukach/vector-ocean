@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 import rasterio
 
@@ -19,6 +20,11 @@ def task(file_path, db_name, table_name,
     - Monochrome data
     - Polygonize
     """
+    # TODO:
+    # - Downsample data for lower zoom-levels
+    # - Add countouring
+    # - Run polygonize on each threshold image, not combined? (No holes in coverage)
+    # - Vertical exageration correction on different zoom levels?
 
     with tempfile.TemporaryDirectory() as tmpdir:
         overlap = float(2)
@@ -37,7 +43,7 @@ def task(file_path, db_name, table_name,
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Crop data
+        # Clip data
         if clipfile_path:
             clipfile_subset_path = "{tmpdir}/clipfile_subset.shp".format(tmpdir=tmpdir)
             cmd = "ogr2ogr -f \"ESRI Shapefile\" {clipfile_subset_path} {clipfile_path} -clipsrc {x_min} {y_min} {x_max} {y_max}"
@@ -68,7 +74,7 @@ def task(file_path, db_name, table_name,
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Thresholds
-        threshold_base = "{}_threshold".format(hillshade_path)
+        threshold_base = "{}".format(hillshade_path)
         threshold_path_tmplt = threshold_base + "_threshold_{threshold}.tif"
         for threshold in thresholds:
             threshold_path = threshold_path_tmplt.format(threshold=threshold)
@@ -77,65 +83,89 @@ def task(file_path, db_name, table_name,
             if verbosity > 1:
                 print(cmd)
             subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        threshold_paths = " ".join([threshold_path_tmplt.format(threshold=threshold) for threshold in thresholds])
 
-        # Combine thresholds
-        combined_path = "{}_combined.gif".format(hillshade_path)
-        cmd = "convert {threshold_paths} -evaluate-sequence mean {output}"
-        cmd = cmd.format(threshold_paths=threshold_paths, output=combined_path)
-        if verbosity > 1:
-            print(cmd)
-        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Re-apply geodata
+            if verbosity > 1:
+                print(cmd)
+            cmd = "listgeo -tfw {}".format(subset_path)
+            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = "mv {input}.tfw {output}.tfw"
+            cmd = cmd.format(
+                input='.'.join(subset_path.split('.')[:-1]),
+                output='.'.join(threshold_path.split('.')[:-1])
+            )
+            if verbosity > 1:
+                print(cmd)
+            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Convert
-        combined_tif_path = "{}.tif".format('.'.join(combined_path.split('.')[:-1]))
-        cmd = "convert {input} {output}".format(input=combined_path, output=combined_tif_path)
-        if verbosity > 1:
-            print(cmd)
-        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # Re-apply geodata
-        if verbosity > 1:
-            print(cmd)
-        cmd = "listgeo -tfw {}".format(subset_path)
-        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        cmd = "mv {input}.tfw {output}.tfw"
-        cmd = cmd.format(
-            input='.'.join(subset_path.split('.')[:-1]),
-            output='.'.join(combined_tif_path.split('.')[:-1])
-        )
-        if verbosity > 1:
-            print(cmd)
-        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # Polygonize
-        geojson_path = "{}.geojson".format(combined_tif_path)
-        cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {table_name} value"
-        cmd = cmd.format(input=combined_tif_path, db_name=db_name, table_name=table_name)
-        if verbosity > 1:
-            print(cmd)
-        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Polygonize
+            geojson_path = "{}.geojson".format(threshold_path)
+            cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {table_name} value"
+            cmd = cmd.format(input=threshold_path, db_name=db_name, table_name=table_name)
+            if verbosity > 1:
+                print(cmd)
+            try:
+                subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                time.sleep(2)  # Handle race condition on creating table
+                subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         if pause:
             input(tmpdir)
-        elif verbosity:
-            print('.', end='\n' if verbosity > 1 else '')
-            sys.stdout.flush()
 
 
-def scheduler(**kwargs):
-    # TODO: Use kwargs
+def scheduler(clear_tables=False, async=False, **kwargs):
     with rasterio.drivers():
         with rasterio.open(kwargs['file_path']) as src:
             width = src.width
             height = src.height
+
+    # Prepare threading tooling
+    if not async:
+        import threading
+        from queue import Queue, Empty
+        import multiprocessing
+
+        q = Queue()
+        num_worker_threads = multiprocessing.cpu_count() * 2
+
+        # Workers
+        def worker():
+            while True:
+                try:
+                    kwargs = q.get()
+                except Empty:
+                    return
+
+                try:
+                    task(**kwargs)
+                    q.task_done()
+                    # logger.info("Created DB for tenant '{}'".format(subdomain))
+                except:
+                    # logger.exception("Failed to create DB for '{}'".format(subdomain))
+                    q.task_done()
+                    raise
+                finally:
+                    if not kwargs['verbosity']:
+                        tile_num = (kwargs['row'] + (kwargs['col']*kwargs['num_rows']) + 1)
+                        total = int(math.pow(kwargs['num_rows'], 2))
+                        percentage = '%.4f' % (tile_num*100.0 / total)
+                        status = 'processed' if not async else 'scheduled'
+                        msg = "\r{}% {} ({}/{})".format(percentage, status, tile_num, total)
+                        print(msg, end="")
+
+        # Create Worker Threads
+        for i in range(num_worker_threads):
+            t = threading.Thread(target=worker)
+            t.daemon = True
+            t.start()
 
     zoom = 8
     for z in range(zoom, zoom+1):
         num_rows = int(math.pow(2, z))
         table_name = z
 
-        if kwargs['clear_tables']:
+        if clear_tables:
             cmd = 'psql {db_name} -c "DROP TABLE \\"{table_name}\\""'
             cmd = cmd.format(db_name=kwargs['db_name'], table_name=table_name)
             subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -143,7 +173,6 @@ def scheduler(**kwargs):
         for col in range(0, num_rows):
             for row in range(0, num_rows):
                 task_kwargs = kwargs.copy()
-                del task_kwargs['clear_tables']
                 task_kwargs.update({
                     'table_name': table_name,
                     'num_rows': num_rows,
@@ -154,7 +183,23 @@ def scheduler(**kwargs):
                     'vert_exag': 20,
                     'thresholds': (30, 50, 70, 80),
                 })
-                task(**task_kwargs)
+                if not async:
+                    q.put(task_kwargs)
+                else:
+                    task(**task_kwargs)
+
+                    if not kwargs['verbosity']:
+                        tile_num = (row + (col*num_rows) + 1)
+                        total = int(math.pow(num_rows, 2))
+                        percentage = '%.4f' % (tile_num*100.0 / total)
+                        status = 'processed' if not async else 'scheduled'
+                        msg = "\r{}% {} ({}/{})".format(percentage, status, tile_num, total)
+                        print(msg, end="")
+
+        if not async:
+            q.join()  # block until all tasks are done
+        print("\nComplete")
+
 
 
 if __name__ == '__main__':
@@ -183,7 +228,7 @@ if __name__ == '__main__':
         default=False,
         help=('Wait for input after each tile is generated, before '
             'temporary directory is removed. For development/testing '
-            'purposes.') )
+            'purposes.'))
     parser.add_argument(
         '--db_name', '-db',
         dest='db_name',
@@ -195,6 +240,11 @@ if __name__ == '__main__':
         action='store_true',
         default=False,
         help="Clear destination tables before creating tiles")
+    parser.add_argument(
+        '--async',
+        action='store_true',
+        default=False,
+        help="Process asynchronously with Celery")
     args = parser.parse_args()
     try:
         scheduler(**args.__dict__)
