@@ -113,60 +113,28 @@ def task(file_path, db_name, table_name,
         if pause:
             input(tmpdir)
 
+        return "{} - {}".format(col, row)
 
-def scheduler(clear_tables=False, async=False, **kwargs):
+
+def scheduler(clear_tables=False, celery=False, **kwargs):
     with rasterio.drivers():
         with rasterio.open(kwargs['file_path']) as src:
             width = src.width
             height = src.height
 
     # Prepare threading tooling
-    if not async:
-        import threading
-        from queue import Queue, Empty
-        import multiprocessing
-
+    if not celery:
+        from queue import Queue
         q = Queue()
-        num_worker_threads = multiprocessing.cpu_count() * 2
-
-        # Workers
-        def worker():
-            while True:
-                try:
-                    kwargs = q.get()
-                except Empty:
-                    return
-
-                try:
-                    task(**kwargs)
-                    q.task_done()
-                    # logger.info("Created DB for tenant '{}'".format(subdomain))
-                except:
-                    # logger.exception("Failed to create DB for '{}'".format(subdomain))
-                    q.task_done()
-                    raise
-                finally:
-                    if not kwargs['verbosity']:
-                        tile_num = (kwargs['row'] + (kwargs['col']*kwargs['num_rows']) + 1)
-                        total = int(math.pow(kwargs['num_rows'], 2))
-                        percentage = '%.4f' % (tile_num*100.0 / total)
-                        status = 'processed' if not async else 'scheduled'
-                        msg = "\r{}% {} ({}/{})".format(percentage, status, tile_num, total)
-                        print(msg, end="")
-
-        # Create Worker Threads
-        for i in range(num_worker_threads):
-            t = threading.Thread(target=worker)
-            t.daemon = True
-            t.start()
 
     zoom = 8
+    # Queue work
     for z in range(zoom, zoom+1):
         num_rows = int(math.pow(2, z))
         table_name = z
 
         if clear_tables:
-            cmd = 'psql {db_name} -c "DROP TABLE \\"{table_name}\\""'
+            cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
             cmd = cmd.format(db_name=kwargs['db_name'], table_name=table_name)
             subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -183,8 +151,11 @@ def scheduler(clear_tables=False, async=False, **kwargs):
                     'vert_exag': 20,
                     'thresholds': (30, 50, 70, 80),
                 })
-                if not async:
+
+                # Insert into Thread queue
+                if not celery:
                     q.put(task_kwargs)
+                # Insert into Celery queue
                 else:
                     task(**task_kwargs)
 
@@ -192,14 +163,30 @@ def scheduler(clear_tables=False, async=False, **kwargs):
                         tile_num = (row + (col*num_rows) + 1)
                         total = int(math.pow(num_rows, 2))
                         percentage = '%.4f' % (tile_num*100.0 / total)
-                        status = 'processed' if not async else 'scheduled'
+                        status = 'processed' if not celery else 'scheduled'
                         msg = "\r{}% {} ({}/{})".format(percentage, status, tile_num, total)
                         print(msg, end="")
 
-        if not async:
-            q.join()  # block until all tasks are done
-        print("\nComplete")
+        # Process queue
+        if not celery:
+            from concurrent.futures import ThreadPoolExecutor as Pool
+            import multiprocessing
+            import functools
 
+            def counter(future):
+                counter.processed += 1
+                percentage = '%.4f' % (counter.processed*100.0 / counter.to_process)
+                msg = "\r{}% processed ({}/{})".format(percentage, counter.processed, counter.to_process)
+                print(msg, end="")
+            counter.processed = 0
+            counter.to_process = int(math.pow(num_rows, 2))
+
+            with Pool(max_workers=multiprocessing.cpu_count() * 2) as executor:
+                while not q.empty():
+                    kwargs = q.get()
+                    future = executor.submit(task, **kwargs).add_done_callback(counter)
+
+        print("\nComplete")
 
 
 if __name__ == '__main__':
@@ -241,7 +228,7 @@ if __name__ == '__main__':
         default=False,
         help="Clear destination tables before creating tiles")
     parser.add_argument(
-        '--async',
+        '--celery',
         action='store_true',
         default=False,
         help="Process asynchronously with Celery")
