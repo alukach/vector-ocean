@@ -74,7 +74,7 @@ def task(file_path, db_name, table_name,
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Thresholds
-        threshold_base = "{}".format(hillshade_path)
+        threshold_base = "{}_threshold".format(hillshade_path)
         threshold_path_tmplt = threshold_base + "_threshold_{threshold}.tif"
         for threshold in thresholds:
             threshold_path = threshold_path_tmplt.format(threshold=threshold)
@@ -83,32 +83,47 @@ def task(file_path, db_name, table_name,
             if verbosity > 1:
                 print(cmd)
             subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        threshold_paths = " ".join([threshold_path_tmplt.format(threshold=threshold) for threshold in thresholds])
 
-            # Re-apply geodata
-            if verbosity > 1:
-                print(cmd)
-            cmd = "listgeo -tfw {}".format(subset_path)
-            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            cmd = "mv {input}.tfw {output}.tfw"
-            cmd = cmd.format(
-                input='.'.join(subset_path.split('.')[:-1]),
-                output='.'.join(threshold_path.split('.')[:-1])
-            )
-            if verbosity > 1:
-                print(cmd)
-            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Combine thresholds
+        combined_path = "{}_combined.gif".format(hillshade_path)
+        cmd = "convert {threshold_paths} -evaluate-sequence mean {output}"
+        cmd = cmd.format(threshold_paths=threshold_paths, output=combined_path)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-            # Polygonize
-            geojson_path = "{}.geojson".format(threshold_path)
-            cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {table_name} value"
-            cmd = cmd.format(input=threshold_path, db_name=db_name, table_name=table_name)
-            if verbosity > 1:
-                print(cmd)
-            try:
-                subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except subprocess.CalledProcessError:
-                time.sleep(2)  # Handle race condition on creating table
-                subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Convert
+        combined_tif_path = "{}.tif".format('.'.join(combined_path.split('.')[:-1]))
+        cmd = "convert {input} {output}".format(input=combined_path, output=combined_tif_path)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Re-apply geodata
+        if verbosity > 1:
+            print(cmd)
+        cmd = "listgeo -tfw {}".format(subset_path)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cmd = "mv {input}.tfw {output}.tfw"
+        cmd = cmd.format(
+            input='.'.join(subset_path.split('.')[:-1]),
+            output='.'.join(combined_tif_path.split('.')[:-1])
+        )
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Polygonize
+        geojson_path = "{}.geojson".format(combined_tif_path)
+        cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {table_name} value"
+        cmd = cmd.format(input=combined_tif_path, db_name=db_name, table_name=table_name)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # TODO: Smooth polygons
+        # TODO: Remove non-shadow/highlight polygons (middle threshold value?)
 
         if pause:
             input(tmpdir)
