@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 
 import rasterio
 
@@ -12,7 +11,7 @@ import rasterio
 def task(file_path, db_name, table_name,
         col, row, src_width, src_height, num_rows,
         clipfile_path, vert_exag, thresholds,
-        verbosity, pause):
+        verbosity, pause, copy_output_dir=None):
     """
     General steps:
     - Subset file
@@ -25,7 +24,6 @@ def task(file_path, db_name, table_name,
     # - Add countouring
     # - Run polygonize on each threshold image, not combined? (No holes in coverage)
     # - Vertical exageration correction on different zoom levels?
-
     with tempfile.TemporaryDirectory() as tmpdir:
         overlap = float(2)
         width = overlap * src_width / num_rows
@@ -87,7 +85,7 @@ def task(file_path, db_name, table_name,
 
         # Combine thresholds
         combined_path = "{}_combined.gif".format(hillshade_path)
-        cmd = "convert {threshold_paths} -evaluate-sequence mean {output}"
+        cmd = "convert {threshold_paths} -evaluate-sequence mean -transparent 'rgb(153,153,153)' {output}"
         cmd = cmd.format(threshold_paths=threshold_paths, output=combined_path)
         if verbosity > 1:
             print(cmd)
@@ -116,14 +114,24 @@ def task(file_path, db_name, table_name,
 
         # Polygonize
         geojson_path = "{}.geojson".format(combined_tif_path)
-        cmd = "gdal_polygonize.py {input} -f PostgreSQL PG:dbname={db_name} {table_name} value"
-        cmd = cmd.format(input=combined_tif_path, db_name=db_name, table_name=table_name)
+        cmd = "gdal_polygonize.py {input} -f GeoJSON {output}"
+        cmd = cmd.format(input=combined_tif_path, output=geojson_path)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # TODO: Smooth polygons
-        # TODO: Remove non-shadow/highlight polygons (middle threshold value?)
+        # Copy output to location
+        if copy_output_dir:
+            cmd = 'cp {input} {copy_output_dir}/{x}_{y}.tif'
+            cmd = cmd.format(input=geojson_path, copy_output_dir=copy_output_dir, x='%05d' % x, y='%05d' % y),
+            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Smooth polygons
+        cmd = "ogr2ogr -f PostgreSQL PG:dbname={db_name} {input} -append -nln {table_name} -simplify 1000"
+        cmd = cmd.format(input=geojson_path, db_name=db_name, table_name=table_name)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         if pause:
             input(tmpdir)
@@ -163,8 +171,8 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                     'src_height': height,
                     'col': col,
                     'row': row,
-                    'vert_exag': 20,
-                    'thresholds': (30, 50, 70, 80),
+                    'vert_exag': 2,
+                    'thresholds': (50, 60, 70, 80, 90),
                 })
 
                 # Insert into Thread queue
@@ -246,8 +254,14 @@ if __name__ == '__main__':
         '--celery',
         action='store_true',
         default=False,
-        help="Process asynchronously with Celery")
+        help="Schedule tasks with Celery")
+    parser.add_argument(
+        '--copy-output-dir', '-out',
+        default=None,
+        help="Copy outputted files to dir")
+
     args = parser.parse_args()
+
     try:
         scheduler(**args.__dict__)
     except KeyboardInterrupt:
