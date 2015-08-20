@@ -120,6 +120,7 @@ Zoom | Global Width (px) | # Tiles Wide
 18 | 67108864 | 262144
 19 | 134217728 | 524288
 
+_TODO: Fill in the downsampling portion_
 
 
 ### 3. Subset Data
@@ -132,15 +133,18 @@ gdal_translate -srcwin 7200 11800 1024 1024 -of GTIFF data/GEBCO_2014_1D_3857_cr
 
 For the purpose of dialing in other commands, we'll experiment with a slice of the Florida / Gulf of Mexico area. This area provides a variety of surface types to visualize.
 
-#### Remove terrain data
+#### Optional: Remove terrain data
 
-Mapbox already offers a great set of terrain data. We're not looking to replace that, only to add missing ocean data. To remove the terrain data from the GEBCO dataset, we'll clip it to only contain ocean data. We'll use the [Generalized Coastline dataset](http://openstreetmapdata.com/data/generalized-coastlines) from OSM to achieve this. The OSM Generalized Coastline dataset only goes up to zoom level 8, which actually appears about right for the resolution of the GEBCO 30 arc-second grid. If we were using higher-resolution data, something like the [Water Polygon dataset](http://openstreetmapdata.com/data/water-polygons) would likely be a better fit.
+Mapbox already offers a great set of terrain data. You may not be looking to replace that, only to add missing ocean data. To remove the terrain data from the GEBCO dataset, we could clip it to only contain ocean data. An option would be to use the [Generalized Coastline dataset](http://openstreetmapdata.com/data/generalized-coastlines) from OSM to achieve this. The OSM Generalized Coastline dataset only goes up to zoom level 8, which actually appears about right for the resolution of the GEBCO 30 arc-second grid. If we were using higher-resolution data, something like the [Water Polygon dataset](http://openstreetmapdata.com/data/water-polygons) would likely be a better fit.
 
 Crop shapefile (takes ~18seconds):
 ```bash
 ogr2ogr -f "ESRI Shapefile" output/cropped_coastline.shp data/water-polygons-generalized-3857/water_polygons_z8.shp -clipsrc 7200 11800 8224 12824
 gdalwarp -cutline output/cropped_coastline.shp output/subset.tif output/subset_cropped.tif
 ```
+
+For the sake of this experiment, we'll encode both the bathymetric and terrain data.
+
 
 ### 4. Hillshade
 
@@ -192,7 +196,7 @@ You're going to want to produce ~4 monochromatic layers representing varying dep
 
 ``` bash
 # Set chosen hillshade value
-hillshade_val=20;
+hillshade_val=2;
 
 # Generate monochrome values
 monochrome () {
@@ -227,7 +231,7 @@ I started with an equally distributed range of thresholds (`20 40 60 80`), and f
 To get a visualization of the output, merge the images into a single image:
 
 ``` bash
-hillshade_val=20;
+hillshade_val=2;
 convert output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_30.tif \
         output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_50.tif \
         output/subset.tif_hillshade_${hillshade_val}.tif_monochrome_70.tif \
@@ -267,6 +271,10 @@ gdal_polygonize.py output/subset.tif_hillshade_monochrome_combined.tif -f GeoJSO
 _Note: Should we then dissolve/aggregate polygons between subsets that share borders? [[1]](http://gis.stackexchange.com/questions/85028/dissolve-aggregate-polygons-with-ogr2ogr-or-gpc)_
 
 ## II. Generate Tiles
+
+[PostGIS Manual](https://www.mapbox.com/guides/postgis-manual/)
+[PostGIS Vector Tile Utils](https://github.com/mapbox/postgis-vt-util)
+
 
 
 
