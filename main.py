@@ -11,6 +11,7 @@ import rasterio
 def task(file_path, db_name, table_name,
         col, row, src_width, src_height, num_rows,
         clipfile_path, vert_exag, thresholds,
+        contour_interval, contour_table,
         verbosity, pause, copy_output_dir=None):
     """
     General steps:
@@ -37,6 +38,19 @@ def task(file_path, db_name, table_name,
         subset_path = "{tmpdir}/{x}_{y}_subset.tif".format(x='%05d' % x, y='%05d' % y, tmpdir=tmpdir)
         cmd = "gdal_translate -srcwin {x} {y} {width} {height} -of GTIFF {input} {output}"
         cmd = cmd.format(x=x, y=y, width=width, height=height, input=file_path, output=subset_path)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Contour data
+        contour_path = "{subset_path}.contour.geojson".format(subset_path=subset_path)
+        cmd = "gdal_contour -a elev {input} -f GeoJSON {output} -i {interval}"
+        cmd = cmd.format(input=subset_path, output=contour_path, interval=contour_interval)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cmd = "ogr2ogr -f PostgreSQL PG:dbname={db_name} {input} -append -nln {contour_table}"
+        cmd = cmd.format(input=contour_path, db_name=db_name, interval=contour_interval, contour_table=contour_table)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -160,6 +174,9 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
             cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
             cmd = cmd.format(db_name=kwargs['db_name'], table_name=table_name)
             subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
+            cmd = cmd.format(db_name=kwargs['db_name'], table_name=kwargs['contour_table'])
+            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         for col in range(0, num_rows):
             for row in range(0, num_rows):
@@ -173,6 +190,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                     'row': row,
                     'vert_exag': 2,
                     'thresholds': (50, 60, 70, 80, 90),
+                    'contour_interval': 1000,
                 })
 
                 # Insert into Thread queue
@@ -240,11 +258,15 @@ if __name__ == '__main__':
             'temporary directory is removed. For development/testing '
             'purposes.'))
     parser.add_argument(
-        '--db_name', '-db',
+        '--db-name', '-db',
         dest='db_name',
         metavar='DB_NAME',
         default='ocean-tiles',
         help="Output Database")
+    parser.add_argument(
+        '--contour-table',
+        default='contour',
+        help="Contour table name")
     parser.add_argument(
         '--clear-tables',
         action='store_true',
