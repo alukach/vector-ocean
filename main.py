@@ -127,7 +127,7 @@ def task(file_path, db_name, table_name,
 
         # Polygonize
         geojson_path = "{}.geojson".format(combined_tif_path)
-        cmd = "gdal_polygonize.py {input} -f GeoJSON {output}"
+        cmd = "gdal_polygonize.py {input} -f GeoJSON {output} foo value"
         cmd = cmd.format(input=combined_tif_path, output=geojson_path)
         if verbosity > 1:
             print(cmd)
