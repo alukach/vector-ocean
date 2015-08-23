@@ -187,7 +187,6 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                     'src_height': height,
                     'col': col,
                     'row': row,
-                    'vert_exag': 2,
                     'thresholds': (50, 60, 70, 80, 90),
                     'contour_interval': 1000,
                 })
@@ -242,11 +241,15 @@ if __name__ == '__main__':
         metavar='INPUT',
         help="Input file name")
     parser.add_argument(
+        '--vert-exag', '-vx',
+        default=20,
+        help="Vertical exaggeration")
     parser.add_argument(
         '--buffer',
         default=8,
         type=int,
         help="Tile buffer (1 is no buffer)")
+    parser.add_argument(
         '--clipfile',
         dest='clipfile_path',
         metavar='CLIPFILE_PATH',
