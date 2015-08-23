@@ -278,6 +278,24 @@ _Note: Should we then dissolve/aggregate polygons between subsets that share bor
 
 
 
+## Extras:
+_TODO: Explain more about gazeteer_
+Load [labels](http://www.ngdc.noaa.gov/gazetteer/)
+
+``` bash
+export PGCLIENTENCODING=LATIN1
+insert () {
+    ogr2ogr -t_srs EPSG:3857 -f PostgreSQL PG:dbname=ocean-tiles data/features/features-$1.shp -nln $1-features -lco OVERWRITE=YES $2 $3;
+}
+
+insert point
+insert multipoint
+insert polygon
+insert multipolygon -nlt MultiPolygon
+insert linestring
+insert multilinestring -nlt MultiLineString
+```
+
 
 ## Notes
 
