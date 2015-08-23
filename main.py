@@ -187,7 +187,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                     'src_height': height,
                     'col': col,
                     'row': row,
-                    'thresholds': (50, 60, 70, 80, 90),
+                    'thresholds': (20, 50, 70, 80, 90),
                     'contour_interval': 1000,
                 })
 
