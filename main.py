@@ -16,14 +16,14 @@ def task(file_path, db_name, table_name,
     """
     General steps:
     - Subset file
+    - Contour data
     - Hillshade data
     - Monochrome data
     - Polygonize
+    - Smooth
     """
     # TODO:
     # - Downsample data for lower zoom-levels
-    # - Add countouring
-    # - Run polygonize on each threshold image, not combined? (No holes in coverage)
     # - Vertical exageration correction on different zoom levels?
     with tempfile.TemporaryDirectory() as tmpdir:
         overlap = float(2)
@@ -235,7 +235,9 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Concurrent raster processing demo")
+        description="Concurrent raster processing demo",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
     parser.add_argument(
         'file_path',
         metavar='INPUT',
