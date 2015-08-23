@@ -9,7 +9,7 @@ import rasterio
 
 
 def task(file_path, db_name, table_name,
-        col, row, src_width, src_height, num_rows,
+        col, row, src_width, src_height, num_rows, buffer,
         clipfile_path, vert_exag, thresholds,
         contour_interval, contour_table,
         verbosity, pause, copy_output_dir=None):
@@ -26,13 +26,12 @@ def task(file_path, db_name, table_name,
     # - Downsample data for lower zoom-levels
     # - Vertical exageration correction on different zoom levels?
     with tempfile.TemporaryDirectory() as tmpdir:
-        overlap = float(2)
-        width = overlap * src_width / num_rows
-        height = overlap * src_height / num_rows
+        width = math.ceil((src_width / num_rows) + (2 * buffer))
+        height = math.ceil((src_height / num_rows) + (2 * buffer))
         # TODO: If x or y is negative, handle getting selection from other
         # side of image and joining.
-        x = (col * width / overlap) - (1/overlap * width/2)
-        y = (row * height / overlap) - (1/overlap * height/2)
+        x = math.floor((col * src_width / num_rows) - buffer)
+        y = math.floor((row * src_height / num_rows) - buffer)
 
         # Subset data
         subset_path = "{tmpdir}/{x}_{y}_subset.tif".format(x='%05d' % x, y='%05d' % y, tmpdir=tmpdir)
@@ -243,6 +242,11 @@ if __name__ == '__main__':
         metavar='INPUT',
         help="Input file name")
     parser.add_argument(
+    parser.add_argument(
+        '--buffer',
+        default=8,
+        type=int,
+        help="Tile buffer (1 is no buffer)")
         '--clipfile',
         dest='clipfile_path',
         metavar='CLIPFILE_PATH',
