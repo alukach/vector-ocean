@@ -1,0 +1,96 @@
+# This is a YML version of a style.
+version: 7
+# This is the basic style
+name: 'Basic'
+
+
+# Constants
+constants:
+  # "@water": "#88aacc"
+  "@water": "rgb(186,226,254)"
+  "@water_dark": "#185869"
+  "@land": "rgb(244,239,225)"
+
+
+# Sources
+sources:
+  mapbox:
+    type: 'vector'
+    url: 'mapbox://mapbox.mapbox-streets-v6'
+  ocean-tiles:
+    type: 'vector'
+    tiles:
+      - 'http://localhost:7777/{z}/{x}/{y}.pbf'
+    minzoom: 0
+    maxzoom: 12
+sprite: ''
+glyphs: ''
+
+
+# Layers
+layers:
+  - id: 'water'
+    type: 'fill'
+    source: 'mapbox'
+    'source-layer': 'water'
+    paint:
+      'fill-color': '@water'
+      # 'fill-opacity': 0.4
+
+  # Bathymetry
+  - id: 'bathy-full-shadow'  # full_shadow (southeast)
+    type: 'fill'
+    source: 'ocean-tiles'
+    'source-layer': 'terrain'
+    filter: ["all", ["==", "value", 0]]
+    paint:
+      'fill-color': 'rgb(121,176,217)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(0,0,0)'
+  - id: 'bathy-mid-shadow'
+    type: 'fill'
+    source: 'ocean-tiles'
+    'source-layer': 'terrain'
+    filter: ["all", ["==", "value", 51]]
+    paint:
+      'fill-color': 'rgb(138,187,226)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(51,51,51)'
+  - id: 'bathy-light-shadow'
+    type: 'fill'
+    source: 'ocean-tiles'
+    'source-layer': 'terrain'
+    filter: ["all", ["==", "value", 102]]
+    paint:
+      'fill-color': 'rgb(159,201,231)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(102,102,102)'
+  - id: 'bathy-light-highlight'
+    type: 'fill'
+    source: 'ocean-tiles'
+    'source-layer': 'terrain'
+    filter: ["all", ["==", "value", 204]]
+    paint:
+      'fill-color': 'rgb(227,240,252)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(204,204,204)'
+  - id: 'bathy-full-highlight'
+    type: 'fill'
+    source: 'ocean-tiles'
+    'source-layer': 'terrain'
+    filter: ["all", ["==", "value", 255]]
+    paint:
+      'fill-color': 'rgb(227,240,252)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(255,255,255)'
+
+  - id: 'point-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    'source-layer': 'point-features'
+    layout:
+      'text-field': '{name}'
+    paint:
+      'text-color': '#f00'
+
+

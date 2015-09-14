@@ -1,0 +1,280 @@
+_prefs:
+  disabled: []
+  inspector: false
+  mapid: ''
+  rev: ''
+  saveCenter: true
+attribution: ''
+center:
+  - -50.7239
+  - -25.9037
+  - 7
+description: ''
+Layer:
+  - id: multilinestring-features
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |-
+        (
+          SELECT * FROM "water"
+          WHERE /*Z(!scale_denominator!) >= 7
+          AND*/ wkb_geometry && !bbox!
+        ) as data
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: water
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |-
+        (
+          SELECT * FROM "water"
+          WHERE /*Z(!scale_denominator!) >= 7
+          AND*/ wkb_geometry && !bbox!
+        ) as data
+      type: postgis
+      user: ''
+    description: Water
+    fields:
+      fid: Number
+      ogc_fid: Number
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: terrain
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |-
+        (
+          SELECT * FROM "8"
+
+          WHERE /*Z(!scale_denominator!) >= 7
+          AND*/ wkb_geometry && !bbox!
+
+        ) AS data
+      type: postgis
+      user: ''
+    description: Ocean Data
+    fields:
+      ogc_fid: Number
+      value: Number
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: contours
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |-
+        (
+          SELECT * FROM "contour"
+          WHERE /*Z(!scale_denominator!) >= 7
+          AND*/ wkb_geometry && !bbox!
+        ) AS data
+      type: postgis
+      user: ''
+    description: Contours
+    fields:
+      id: Number
+      elev: Number
+      ogc_fid: Number
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: point-feature
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: "( SELECT * FROM \"point_features\" ) as data"
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: multipoint-features
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |
+        (SELECT * FROM "multipoint_features") as data
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: polygon-features
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |
+        (SELECT * FROM "polygon_features") as data
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: multipolygon-features
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |
+        (SELECT * FROM "multipolygon_features") as data
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+  - id: linestring-features
+    Datasource:
+      dbname: ocean-tiles
+      extent: -20037508.34,-20037508.34,20037508.34,20037508.34
+      geometry_field: ''
+      geometry_table: ''
+      host: ''
+      key_field: ''
+      max_size: 512
+      password: ''
+      port: ''
+      table: |
+        (SELECT * FROM "linestring_features") as data
+      type: postgis
+      user: ''
+    description: ''
+    fields:
+      comments: String
+      discoverer: String
+      discovery_: String
+      history: String
+      meeting: String
+      name: String
+      ogc_fid: Number
+      proposal_y: String
+      proposer: String
+      type: String
+    properties:
+      "buffer-size": 8
+    srs: +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over
+maxzoom: 10
+minzoom: 0
+name: Ocean Tiles
