@@ -1,6 +1,5 @@
 import math
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -9,7 +8,7 @@ import rasterio
 
 
 def task(file_path, db_name, table_name, zoom,
-        col, row, src_width, src_height, num_rows, buffer,
+        col, row, src_width, src_height, num_rows, tile_buffer,
         clipfile_path, vert_exag, thresholds,
         contour_interval, contour_table,
         verbosity, pause, copy_output_dir=None):
@@ -26,23 +25,35 @@ def task(file_path, db_name, table_name, zoom,
     # - Downsample data for lower zoom-levels
     # - Vertical exageration correction on different zoom levels?
     with tempfile.TemporaryDirectory() as tmpdir:
-        width = math.ceil((src_width / num_rows) + (2 * buffer))
-        height = math.ceil((src_height / num_rows) + (2 * buffer))
+
+        tile_size = 256
+        # Resample data
+        reproj_path = os.path.join(tmpdir, 'reproj.tif')
+        cmd = "gdalwarp -ts {tile_size} {tile_size} -r average {input} {output}"
+        cmd = cmd.format(tile_size=tile_size*num_rows, input=file_path, output=reproj_path)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # width = math.ceil((src_width / num_rows) + (2 * tile_buffer))
+        # height = math.ceil((src_height / num_rows) + (2 * tile_buffer))
+        width = tile_size + (2 * tile_buffer)
+        height = tile_size + (2 * tile_buffer)
         # TODO: If x or y is negative, handle getting selection from other
         # side of image and joining.
-        x = math.floor((col * src_width / num_rows) - buffer)
-        y = math.floor((row * src_height / num_rows) - buffer)
+        x = col * width - tile_buffer
+        y = row * width - tile_buffer
 
         # Subset data
-        subset_path = "{tmpdir}/{x}_{y}_subset.tif".format(x='%05d' % x, y='%05d' % y, tmpdir=tmpdir)
+        subset_path = os.path.join(tmpdir, "subset.tif".format(x='%05d' % x, y='%05d' % y))
         cmd = "gdal_translate -srcwin {x} {y} {width} {height} -of GTIFF {input} {output}"
-        cmd = cmd.format(x=x, y=y, width=width, height=height, input=file_path, output=subset_path)
+        cmd = cmd.format(x=x, y=y, width=width, height=height, input=reproj_path, output=subset_path)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Contour data
-        contour_path = "{subset_path}.contour.geojson".format(subset_path=subset_path)
+        contour_path = "{input}.contour.geojson".format(input=subset_path)
         cmd = "gdal_contour -a elev {input} -f GeoJSON {output} -i {interval}"
         cmd = cmd.format(input=subset_path, output=contour_path, interval=contour_interval)
         if verbosity > 1:
@@ -135,12 +146,12 @@ def task(file_path, db_name, table_name, zoom,
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Add Zoom information
-        cmd = "ogrinfo {shapefile} -sql \"ALTER TABLE {layer_name} ADD COLUMN zoom varchar(50);\""
+        cmd = "ogrinfo {shapefile} -sql \"ALTER TABLE {layer_name} ADD COLUMN zoom integer(50);\""
         cmd = cmd.format(shapefile=shp_path, layer_name=output_name)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        cmd = "ogrinfo {shapefile} -dialect SQLite -sql \"UPDATE {layer_name} SET zoom = '{zoom}';\""
+        cmd = "ogrinfo {shapefile} -dialect SQLite -sql \"UPDATE {layer_name} SET zoom = {zoom};\""
         cmd = cmd.format(shapefile=shp_path, layer_name=output_name, zoom=zoom)
         if verbosity > 1:
             print(cmd)
@@ -176,19 +187,18 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
         from queue import Queue
         q = Queue()
 
-    zoom = 8
-    # Queue work
-    for z in range(zoom, zoom+1):
-        num_rows = int(math.pow(2, z))
-        table_name = kwargs.pop('bathy_table')
+    table_name = kwargs.pop('bathy_table')
+    if clear_tables:
+        cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
+        cmd = cmd.format(db_name=kwargs['db_name'], table_name=table_name)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
+        cmd = cmd.format(db_name=kwargs['db_name'], table_name=kwargs['contour_table'])
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        if clear_tables:
-            cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
-            cmd = cmd.format(db_name=kwargs['db_name'], table_name=table_name)
-            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
-            cmd = cmd.format(db_name=kwargs['db_name'], table_name=kwargs['contour_table'])
-            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Queue work
+    for z in range(1, 3):
+        num_rows = int(math.pow(2, z))
 
         for col in range(0, num_rows):
             for row in range(0, num_rows):
@@ -238,7 +248,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                     kwargs = q.get()
                     executor.submit(task, **kwargs).add_done_callback(counter)
 
-        print("\nComplete")
+        print("\nZoom level {} complete".format(z))
 
 
 if __name__ == '__main__':
@@ -258,7 +268,7 @@ if __name__ == '__main__':
         default=20,
         help="Vertical exaggeration")
     parser.add_argument(
-        '--buffer',
+        '--tile-buffer',
         default=8,
         type=int,
         help="Tile buffer (1 is no buffer)")
