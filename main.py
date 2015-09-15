@@ -8,7 +8,7 @@ import tempfile
 import rasterio
 
 
-def task(file_path, db_name, table_name,
+def task(file_path, db_name, table_name, zoom,
         col, row, src_width, src_height, num_rows, buffer,
         clipfile_path, vert_exag, thresholds,
         contour_interval, contour_table,
@@ -48,7 +48,7 @@ def task(file_path, db_name, table_name,
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        cmd = "ogr2ogr -f PostgreSQL PG:dbname={db_name} {input} -append -nln {contour_table}"
+        cmd = "ogr2ogr -f PostgreSQL PG:dbname={db_name} {input} -append -nln {contour_table} -simplify 1000"
         cmd = cmd.format(input=contour_path, db_name=db_name, interval=contour_interval, contour_table=contour_table)
         if verbosity > 1:
             print(cmd)
@@ -126,22 +126,35 @@ def task(file_path, db_name, table_name,
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Polygonize
-        geojson_path = "{}.geojson".format(combined_tif_path)
-        cmd = "gdal_polygonize.py {input} -f GeoJSON {output} foo value"
-        cmd = cmd.format(input=combined_tif_path, output=geojson_path)
+        output_name = 'out'
+        shp_path = os.path.join(tmpdir, "{}.shp".format(output_name))
+        cmd = "gdal_polygonize.py {input} -f 'ESRI Shapefile' {output} foo value"
+        cmd = cmd.format(input=combined_tif_path, output=shp_path)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Add Zoom information
+        cmd = "ogrinfo {shapefile} -sql \"ALTER TABLE {layer_name} ADD COLUMN zoom varchar(50);\""
+        cmd = cmd.format(shapefile=shp_path, layer_name=output_name)
+        if verbosity > 1:
+            print(cmd)
+        subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cmd = "ogrinfo {shapefile} -dialect SQLite -sql \"UPDATE {layer_name} SET zoom = '{zoom}';\""
+        cmd = cmd.format(shapefile=shp_path, layer_name=output_name, zoom=zoom)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Copy output to location
-        if copy_output_dir:
-            cmd = 'cp {input} {copy_output_dir}/{x}_{y}.tif'
-            cmd = cmd.format(input=geojson_path, copy_output_dir=copy_output_dir, x='%05d' % x, y='%05d' % y),
-            subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # if copy_output_dir:
+        #     cmd = 'cp {input} {copy_output_dir}/{x}_{y}.tif'
+        #     cmd = cmd.format(input=shp_path, copy_output_dir=copy_output_dir, x='%05d' % x, y='%05d' % y),
+        #     subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Smooth polygons
         cmd = "ogr2ogr -f PostgreSQL PG:dbname={db_name} {input} -append -nln {table_name} -simplify 1000"
-        cmd = cmd.format(input=geojson_path, db_name=db_name, table_name=table_name)
+        cmd = cmd.format(input=shp_path, db_name=db_name, table_name=table_name)
         if verbosity > 1:
             print(cmd)
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -167,7 +180,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
     # Queue work
     for z in range(zoom, zoom+1):
         num_rows = int(math.pow(2, z))
-        table_name = z
+        table_name = kwargs.pop('bathy_table')
 
         if clear_tables:
             cmd = 'psql {db_name} -c "DROP TABLE IF EXISTS \\"{table_name}\\""'
@@ -182,6 +195,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
                 task_kwargs = kwargs.copy()
                 task_kwargs.update({
                     'table_name': table_name,
+                    'zoom': z,
                     'num_rows': num_rows,
                     'src_width': width,
                     'src_height': height,
@@ -210,7 +224,6 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
         if not celery:
             from concurrent.futures import ThreadPoolExecutor as Pool
             import multiprocessing
-            import functools
 
             def counter(future):
                 counter.processed += 1
@@ -223,7 +236,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
             with Pool(max_workers=multiprocessing.cpu_count() * 2) as executor:
                 while not q.empty():
                     kwargs = q.get()
-                    future = executor.submit(task, **kwargs).add_done_callback(counter)
+                    executor.submit(task, **kwargs).add_done_callback(counter)
 
         print("\nComplete")
 
@@ -276,6 +289,10 @@ if __name__ == '__main__':
         '--contour-table',
         default='contour',
         help="Contour table name")
+    parser.add_argument(
+        '--bathy-table',
+        default='bathy',
+        help="Bathy table name")
     parser.add_argument(
         '--clear-tables',
         action='store_true',
