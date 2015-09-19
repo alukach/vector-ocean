@@ -4,8 +4,10 @@
   "description": "An experiment in serving PBF vector tiles",
   "main": "server.js",
   "dependencies": {
-    "mbtiles": "^0.7.7",
     "express": "^4.11.0",
+    "mbtiles": "^0.7.7",
+    "minimist": "^1.2.0",
+    "mkdirp": "^0.5.1",
     "tilelive": "^5.5.0",
     "tilelive-tmsource": "^0.4.0"
   },
