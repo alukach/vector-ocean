@@ -6,6 +6,9 @@ import tempfile
 
 import rasterio
 
+# TODO:
+# - Utilize Celery
+# - Start logging to file
 
 def task(file_path, db_name, table_name, zoom,
         col, row, src_width, src_height, num_rows, tile_buffer,
@@ -26,7 +29,7 @@ def task(file_path, db_name, table_name, zoom,
     # - Vertical exageration correction on different zoom levels?
     with tempfile.TemporaryDirectory() as tmpdir:
 
-        tile_size = 256
+        tile_size = 256 * 2
         # Resample data
         reproj_path = os.path.join(tmpdir, 'reproj.tif')
         cmd = "gdalwarp -ts {tile_size} {tile_size} -r average {input} {output}"
@@ -197,7 +200,7 @@ def scheduler(clear_tables=False, celery=False, **kwargs):
         subprocess.check_call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Queue work
-    for z in range(1, 3):
+    for z in range(0, 8):
         num_rows = int(math.pow(2, z))
 
         for col in range(0, num_rows):
