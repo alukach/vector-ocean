@@ -270,6 +270,32 @@ gdal_polygonize.py output/subset.tif_hillshade_monochrome_combined.tif -f GeoJSO
 
 _Note: Should we then dissolve/aggregate polygons between subsets that share borders? [[1]](http://gis.stackexchange.com/questions/85028/dissolve-aggregate-polygons-with-ogr2ogr-or-gpc)_
 
+#### Tuning DB
+
+We'll want to add some helpers to our DB and to tune our DB to ensure that it's convenient and performant to use.
+
+#####PostGIS Vector Tile Utils
+
+TODO: Document using [postgis-vt-util](https://github.com/mapbox/postgis-vt-util)
+
+```bash
+psql -U <username> -d <dbname> -f postgis-vt-util.sql
+```
+
+##### Indexing
+
+For more information, see the [GiST Indexes](http://postgis.net/docs/using_postgis_dbmanagement.html#gist_indexes) section of the PostGIS Manual.
+
+```sql
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 1;
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 2;
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 3;
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 4;
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 5;
+VACUUM ANALYZE
+```
+
+
 ## II. Generate Tiles
 
 [PostGIS Manual](https://www.mapbox.com/guides/postgis-manual/)
@@ -295,6 +321,7 @@ insert multipolygon -nlt MultiPolygon
 insert linestring
 insert multilinestring -nlt MultiLineString
 ```
+
 
 
 ## Notes
