@@ -346,3 +346,5 @@ for f in subset.tif_hillshade_.0001.tif_monochrome_*; do
 done
 montage "${arguments[@]}" -tile 2x -geometry 480 ../../imgs/monochrome_montage.jpg
 ```
+
+How do I make my own glyph for custom fonts? See [node-fontnik](https://github.com/mapbox/node-fontnik/)
