@@ -1,16 +1,6 @@
 # This is a YML version of a style.
 version: 7
-# This is the basic style
-name: 'Basic'
-
-
-# Constants
-constants:
-  # "@water": "#88aacc"
-  "@water": "rgb(186,226,254)"
-  "@water_dark": "#185869"
-  "@land": "rgb(244,239,225)"
-
+name: 'Ocean'
 
 # Sources
 sources:
@@ -20,77 +10,215 @@ sources:
   ocean-tiles:
     type: 'vector'
     tiles:
-      - 'http://localhost:7777/{z}/{x}/{y}.pbf'
+      # - 'http://oceantiles.dev/tiles/{z}/{x}/{y}.pbf'
+      - 'http://localhost:7777/tiles/{z}/{x}/{y}.pbf'
     minzoom: 0
-    maxzoom: 12
-sprite: ''
-glyphs: ''
+    maxzoom: 5
+glyphs: 'https://mapbox.s3.amazonaws.com/gl-glyphs-256/{fontstack}/{range}.pbf'
 
 
 # Layers
 layers:
+  - id: 'background'
+    type: 'background'
+    paint:
+      'background-color': "#fff"
   - id: 'water'
     type: 'fill'
     source: 'mapbox'
-    'source-layer': 'water'
+    source-layer: 'water'
     paint:
-      'fill-color': '@water'
-      # 'fill-opacity': 0.4
+      'fill-color': "rgb(186,226,254)"
 
   # Bathymetry
-  - id: 'bathy-full-shadow'  # full_shadow (southeast)
+  - id: 'bathy-full-highlight'
     type: 'fill'
     source: 'ocean-tiles'
-    'source-layer': 'terrain'
-    filter: ["all", ["==", "value", 0]]
+    source-layer: 'terrain'
+    filter: ["all", ["==", "value", 255]]
     paint:
-      'fill-color': 'rgb(121,176,217)'
+      'fill-color': 'rgb(227,240,252)'
       'fill-opacity': .5
-      # 'fill-color': 'rgb(0,0,0)'
-  - id: 'bathy-mid-shadow'
-    type: 'fill'
-    source: 'ocean-tiles'
-    'source-layer': 'terrain'
-    filter: ["all", ["==", "value", 51]]
-    paint:
-      'fill-color': 'rgb(138,187,226)'
-      'fill-opacity': .5
-      # 'fill-color': 'rgb(51,51,51)'
-  - id: 'bathy-light-shadow'
-    type: 'fill'
-    source: 'ocean-tiles'
-    'source-layer': 'terrain'
-    filter: ["all", ["==", "value", 102]]
-    paint:
-      'fill-color': 'rgb(159,201,231)'
-      'fill-opacity': .5
-      # 'fill-color': 'rgb(102,102,102)'
   - id: 'bathy-light-highlight'
     type: 'fill'
     source: 'ocean-tiles'
-    'source-layer': 'terrain'
+    source-layer: 'terrain'
     filter: ["all", ["==", "value", 204]]
     paint:
       'fill-color': 'rgb(227,240,252)'
       'fill-opacity': .5
       # 'fill-color': 'rgb(204,204,204)'
-  - id: 'bathy-full-highlight'
+  - id: 'bathy-light-shadow'
     type: 'fill'
     source: 'ocean-tiles'
-    'source-layer': 'terrain'
-    filter: ["all", ["==", "value", 255]]
+    source-layer: 'terrain'
+    filter: ["all", ["==", "value", 102]]
     paint:
-      'fill-color': 'rgb(227,240,252)'
+      'fill-color': 'rgb(159,201,231)'
       'fill-opacity': .5
-      # 'fill-color': 'rgb(255,255,255)'
+      # 'fill-color': 'rgb(102,102,102)'
+  - id: 'bathy-mid-shadow'
+    type: 'fill'
+    source: 'ocean-tiles'
+    source-layer: 'terrain'
+    filter: ["all", ["==", "value", 51]]
+    paint:
+      'fill-color': 'rgb(138,187,226)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(51,51,51)'
+  - id: 'bathy-full-shadow'  # full_shadow (southeast)
+    type: 'fill'
+    source: 'ocean-tiles'
+    source-layer: 'terrain'
+    filter: ["all", ["==", "value", 0]]
+    paint:
+      'fill-color': 'rgb(121,176,217)'
+      'fill-opacity': .5
+      # 'fill-color': 'rgb(0,0,0)'
 
+  # Labels
+  - id: 'linestring-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    source-layer: 'linestring-features'
+    layout:
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
+    paint:
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
+  - id: 'multilinestring-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    source-layer: 'multilinestring-features'
+    layout:
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
+    paint:
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
+  - id: 'multipoint-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    source-layer: 'multipoint-features'
+    layout:
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
+    paint:
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
+  - id: 'multipolygon-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    source-layer: 'multipolygon-features'
+    layout:
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
+    paint:
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
   - id: 'point-features'
     type: 'symbol'
     source: 'ocean-tiles'
-    'source-layer': 'point-features'
+    source-layer: 'point-features'
     layout:
-      'text-field': '{name}'
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
     paint:
-      'text-color': '#f00'
-
-
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
+  - id: 'polygon-features'
+    type: 'symbol'
+    source: 'ocean-tiles'
+    source-layer: 'polygon-features'
+    layout:
+      "symbol-placement": "line"
+      text-field: '{name} {type}'
+      text-font: "Arial Unicode MS Regular"
+    paint:
+      text-size:
+        base: 1
+        stops:
+          -
+            - 1
+            - 8
+          -
+            - 4
+            - 10
+          -
+            - 5
+            - 14
+      text-color: '#fff'
+      text-halo-color: "#666"
+      text-halo-width: 1
+      text-halo-blur: 1
