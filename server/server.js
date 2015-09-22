@@ -28,9 +28,12 @@ tilelive.load('tmsource://./mapbox_studio.tm2source', function(err, source) {
         var z = req.params[0];
         var x = req.params[1];
         var y = req.params[2];
+        var cache_path = '';
 
-        var cache_path = path.join(argv.cachedir, "{z}/{x}/{y}.pbf");
-        cache_path = cache_path.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+        if (argv.cachedir) {
+          cache_path = path.join(argv.cachedir, "{z}/{x}/{y}.pbf");
+          cache_path = cache_path.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+        }
 
         // Look for file in cache
         fs.stat(cache_path, function(err, stat) {
