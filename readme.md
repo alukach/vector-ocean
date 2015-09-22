@@ -292,7 +292,7 @@ CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 2;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 3;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 4;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 5;
-VACUUM ANALYZE
+VACUUM ANALYZE;
 ```
 
 
