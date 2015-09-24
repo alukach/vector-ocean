@@ -322,6 +322,21 @@ insert linestring
 insert multilinestring -nlt MultiLineString
 ```
 
+General project req's:
+
+```bash
+sudo apt-get update
+sudo apt-get install \
+  htop byobu \
+  git \
+  gdal libgdal-dev geotiff-bin \
+  imagemagick \
+  postgresql postgis \
+  nginx \
+  nodejs npm \
+  python3 python3-pip
+
+```
 
 
 ## Notes
