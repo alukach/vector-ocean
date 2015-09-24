@@ -4,10 +4,9 @@
   <meta charset='utf-8' />
   <title>Mapbox GL</title>
   <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
-  <script src='mapbox-gl/mapbox-gl.js'></script>
-  <script src='mapbox-gl/style_spec.js'></script>
+  <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.11.0/mapbox-gl.js'></script>
   <script src='account.js'></script>
-  <link href='mapbox-gl/mapbox-gl.css' rel='stylesheet' />
+  <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.11.0/mapbox-gl.css' rel='stylesheet' />
   <style>
     body { margin:0; padding:0; }
     #map { position:absolute; top:0; bottom:0; width:100%; }
@@ -24,47 +23,90 @@
       box-sizing:border-box;
       width:100%;
     }
+    #style-dropdown {
+        display: inline-block;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        cursor: pointer;
+        width: 20%;
+        padding: 8px;
+        border-radius: 3px;
+        font-size: 18px;
+        text-align: center;
+        font-family: sans-serif;
+        font-weight: bold;
+    }
   </style>
 </head>
 <body>
+
 <div id='map'></div>
+<select id="style-dropdown" onchange="changeClass()">
+  <option value="">Default</option>
+  <option value="october">Red October</option>
+  <option value="rainbow">Rainbow Road</option>
+</select>
 <div id='errors'></div>
+
 <script>
-var errors = document.getElementById('errors');
-mapboxgl.util.getJSON('style.json', function(err, stylesheet) {
-  if (err) {
-    errors.appendChild(document.createElement('h2')).innerHTML = 'JSON Error';
-    errors.appendChild(document.createElement('p')).innerHTML = err.toString();
-    errors.style.display = 'block';
-    return;
-  }
+// Exit on errors
+if (!mapboxgl.supported()) {
+  errors.appendChild(document.createElement('h2')).innerHTML = ':(';
+  var msg = 'It appears that your browser does not support Mapbox GL.';
+  errors.appendChild(document.createElement('p')).innerHTML = msg;
+  errors.style.display = 'block';
+  throw new Error(msg);
+}
 
-  if (stylesheet.error) {
-      errors.style.display = 'block';
-      errors.appendChild(document.createElement('h2')).innerHTML = 'Script Evaluation Error';
-      errors.appendChild(document.createElement('pre')).innerHTML = stylesheet.error;
-      return;
-  }
-
-  var valid = validate(stylesheet);
-  if (valid.length) {
-      errors.style.display = 'block';
-      errors.appendChild(document.createElement('h2')).innerHTML = 'Style Validation Error';
-      valid.forEach(function(e) {
-          errors.appendChild(document.createElement('p')).innerHTML = e.message;
-          console.error(e);
-      });
-      return;
-  }
-
-  var map = new mapboxgl.Map({
-    container: 'map',
-    style: stylesheet,
-    center: [40, -74.50],
-    zoom: 9,
-    hash: true
-  });
+var map = new mapboxgl.Map({
+  container: 'map',
+  style: 'style.json',
+  center: [40, -74.50],
+  zoom: 9,
+  hash: true
 });
+map.addControl(new mapboxgl.Navigation());
+
+function changeClass() {
+  var style = document.getElementById("style-dropdown").value;
+  var classes = map.getClasses();
+  for (var i=0; i < classes.length; i++) {
+    map.removeClass(classes[i]);
+  }
+  if (map.hasClass(style)) {
+    map.removeClass(style);
+  } else {
+    map.addClass(style);
+  }
+  return false;
+}
+
+// var i = 0;
+// function tour() {
+//   var hawaii = [20.505, -157.37];
+//   var japan = [35.324, -221.141];
+//   var manilla = [14.405, -239.735];
+//   var copenhagen = [57.605, -350.699];
+//   var miami = [26.145, -441.429];
+//   var galapagos = [-0.357, -450.638];
+//
+//   var cities = [
+//     hawaii,
+//     japan,
+//     manilla,
+//     copenhagen,
+//     miami,
+//     galapagos
+//   ]
+//
+//   console.info(cities[i]);
+//   map.flyTo({ center: cities[i], speed: 0.2 });
+//   if (i + 1 < cities.length) { i += 1; } else { i = 0; }
+// }
+
+// var activeTour = setInterval( function () { tour() }, 6000);
+
 </script>
 </body>
 </html>
