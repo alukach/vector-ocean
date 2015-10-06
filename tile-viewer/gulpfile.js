@@ -25,12 +25,12 @@ gulp.task('connect', function() {
 });
 
 gulp.task('html', function() {
-  gulp.src(['./app/*.html', options.style])
+  gulp.src(['../*.html', options.style])
     .pipe(connect.reload());
 });
 
 gulp.task('watch', function() {
-  gulp.watch(['./app/*.html', options.style],
+  gulp.watch(['../*.html', options.style],
     ['compile', 'html']);
 });
 
