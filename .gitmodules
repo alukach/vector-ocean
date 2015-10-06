@@ -1,3 +1,3 @@
 [submodule "postgis-vt-util"]
-	path = postgis-vt-util
+	path = tile-server/postgis-vt-util
 	url = https://github.com/mapbox/postgis-vt-util.git

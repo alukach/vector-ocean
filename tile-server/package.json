@@ -4,6 +4,7 @@
   "description": "An experiment in serving PBF vector tiles",
   "main": "server.js",
   "dependencies": {
+    "async": "^1.4.2",
     "express": "^4.11.0",
     "mbtiles": "^0.7.7",
     "minimist": "^1.2.0",

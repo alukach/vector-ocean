@@ -31,8 +31,8 @@ tilelive.load('tmsource://./mapbox_studio.tm2source', function(err, source) {
         var cache_path = '';
 
         if (argv.cachedir) {
-          cache_path = path.join(argv.cachedir, "{z}/{x}/{y}.pbf");
-          cache_path = cache_path.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+            cache_path = path.join(argv.cachedir, "{z}/{x}/{y}.pbf");
+            cache_path = cache_path.replace("{z}", z).replace("{x}", x).replace("{y}", y);
         }
 
         // Look for file in cache
@@ -43,7 +43,7 @@ tilelive.load('tmsource://./mapbox_studio.tm2source', function(err, source) {
                 res.header('Content-Type', 'application/x-protobuf');
                 res.header('Content-Encoding', 'gzip');
                 fs.createReadStream(cache_path).pipe(res);
-            // Not in cache, get from DB
+                // Not in cache, get from DB
             } else {
                 console.log('get tile %d, %d, %d from db', z, x, y);
                 source.getTile(z, x, y, function(err, tile, headers) {
