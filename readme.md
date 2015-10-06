@@ -292,6 +292,7 @@ CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 2;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 3;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 4;
 CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 5;
+CREATE INDEX ON bathy USING gist (wkb_geometry) WHERE zoom = 6;
 VACUUM ANALYZE;
 ```
 
@@ -301,8 +302,14 @@ VACUUM ANALYZE;
 [PostGIS Manual](https://www.mapbox.com/guides/postgis-manual/)
 [PostGIS Vector Tile Utils](https://github.com/mapbox/postgis-vt-util)
 
+### Hosting
 
+[Download and source Openstack RC](http://docs.openstack.org/cli-reference/content/cli_openrc.html)
 
+```
+swift upload ocean -H 'Content-Encoding: gzip' -H 'Content-Type: application/x-protobuf' -H 'X-Container-Meta-Access-Control-Allow-Origin: *' *
+swift post ocean -H 'X-Container-Meta-Access-Control-Allow-Origin: *'
+```
 
 ## Extras:
 _TODO: Explain more about gazeteer_
@@ -337,7 +344,6 @@ sudo apt-get install \
   python3 python3-pip
 
 ```
-
 
 ## Notes
 
