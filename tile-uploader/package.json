@@ -1,0 +1,28 @@
+{
+  "name": "tile-uploader",
+  "version": "1.0.0",
+  "description": "Access tileserver, uploading returned tiles to Openstack Swift",
+  "main": "upload.js",
+  "dependencies": {
+    "async": "^1.4.2",
+    "mbtiles": "^0.7.7",
+    "minimist": "^1.2.0",
+    "mkdirp": "^0.5.1",
+    "tilelive": "^5.5.0",
+    "tilelive-tmsource": "^0.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/alukach/vector-ocean"
+  },
+  "author": "Anthony Lukach",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alukach/vector-ocean/issues"
+  },
+  "homepage": "https://github.com/alukach/vector-ocean"
+}
