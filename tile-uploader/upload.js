@@ -36,7 +36,6 @@ if (offset) {
     var startZ = Number(xyz[0]);
     var startX = Number(xyz[1]);
     var startY = Number(xyz[2]);
-
 }
 var limit = program.limit || null;
 
@@ -56,6 +55,7 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
     function callback (url) {
         console.info(util.format('Processed %s', url));
     }
+
     var zlevels = range(startZ || minzoom, maxzoom + 1);
     var count = 0;
 
@@ -63,13 +63,13 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
     for (var i=0; i < zlevels.length; i++) {
         var z = zlevels[i];
         var xlevels = range(startX || 0, Math.pow(2, z));
+        startX = null;
 
-        xLoop:
         for (var j=0; j < xlevels.length; j++) {
             var x = xlevels[j];
             var ylevels = range(startY || 0, Math.pow(2, z));
+            startY = null;
 
-            yLoop:
             for (var k=0; k < ylevels.length; k++) {
                 var y = ylevels[k];
                 var url = util.format('%s/%s/%s', z, x, y);
@@ -92,7 +92,10 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
         source.getTile(task.z, task.x, task.y, handleTile);
 
         function handleTile(err, tile, headers) {
-            if (err) return console.error(url, 'failed!', err);
+            if (err) {
+                console.error(url, 'failed!', err);
+                return callback(url);
+            }
 
             // Save to tmpfile
             var fname = url + '.pbf';
@@ -112,7 +115,7 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
                     fs.unlink(fpath);
                 });
             }
-            callback(url);
+            return callback(url);
         }
     }
 });
