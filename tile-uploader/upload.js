@@ -8,6 +8,7 @@ var exec = require('child_process').exec;
 var tilelive = require('tilelive');
 var argv = require('minimist')(process.argv.slice(2));
 var mkdirp = require('mkdirp');
+var console = require('tracer').colorConsole();
 
 require('mbtiles').registerProtocols(tilelive);
 require('tilelive-tmsource')(tilelive);
@@ -19,13 +20,25 @@ program
     .option('-z, --minimum-zoom <zoom>', 'Minimum zoom level to process (defaults to 0).', parseInt)
     .option('-Z, --maximum-zoom <zoom>', 'Maximum zoom level to process (defaults to 6).', parseInt)
     .option('-b, --bucket <name>', 'Bucket in which to upload results (defaults to \'bathy\').')
-	.option('-c, --concurrency <count>', 'Number of concurrent tile operations (defaults to 2).', parseInt)
+    .option('-c, --concurrency <count>', 'Number of concurrent tile operations (defaults to 2).', parseInt)
+    .option('--starting-tile <z/x/y>', 'Starting position of upload process (in the event that you want to start processing from a specific tile)')
+	.option('--limit <count>', 'Limit to total number of tiles to be processed (defaults to 0)')
 	.parse(process.argv);
 
 var minzoom = program.minimumZoom || 0;
 var maxzoom = program.maximumZoom || 6;
 var bucket = program.bucket || 'bathy';
 var concurrency = program.concurrency || 2;
+var offset = program.startingTile || null;
+if (offset) {
+    var xyz = offset.split('/');
+    if (xyz.length != 3) throw "Improperly formatted 'starting-tile' value. Must be inf the following format: z/x/y";
+    var startZ = Number(xyz[0]);
+    var startX = Number(xyz[1]);
+    var startY = Number(xyz[2]);
+
+}
+var limit = program.limit || null;
 
 tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err, source) {
     // Queue Handler
@@ -34,24 +47,39 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
     // Finishing Message
     q.drain = function() {
         var cmd = util.format('swift post %s -H \'X-Container-Meta-Access-Control-Allow-Origin: *\'', bucket);
-        runCmd(cmd);
-        console.log('all items have been processed');
+        exec(cmd);
+        console.info('all items have been processed');
         return process.exit();
     };
 
     // Queue up jobs
     function callback (url) {
-        console.log(util.format('Processed %s', url));
+        console.info(util.format('Processed %s', url));
     }
-    var levels = range(minzoom, maxzoom + 1);
-    for (var i=0; i < levels.length; i++) {
-        var z = levels[i];
-        for (var x in range(0, Math.pow(2, z))) {
-            for (var y in range(0, Math.pow(2, z))) {
+    var zlevels = range(startZ || minzoom, maxzoom + 1);
+    var count = 0;
+
+    zLoop:
+    for (var i=0; i < zlevels.length; i++) {
+        var z = zlevels[i];
+        var xlevels = range(startX || 0, Math.pow(2, z));
+
+        xLoop:
+        for (var j=0; j < xlevels.length; j++) {
+            var x = xlevels[j];
+            var ylevels = range(startY || 0, Math.pow(2, z));
+
+            yLoop:
+            for (var k=0; k < ylevels.length; k++) {
+                var y = ylevels[k];
                 var url = util.format('%s/%s/%s', z, x, y);
-                var zxy = [z, x, y];
-                console.log("Adding the following to the queue:", url);
+                console.info("Adding the following to the queue:", url);
                 q.push({z:z, x:x, y:y}, callback);
+
+                if (limit && (count += 1) >= limit) {
+                    console.warn("Hit tile limit of " + limit + ". Not scheduling any more tiles");
+                    break zLoop;
+                }
             }
         }
     }
@@ -59,34 +87,32 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
     // Task
     function tileUploaderTask(task, callback) {
         var url = util.format('%s/%s/%s', task.z, task.x, task.y);
-        console.log('Procesessing ' + url);
+        console.info('Procesessing ' + url);
 
         source.getTile(task.z, task.x, task.y, handleTile);
 
         function handleTile(err, tile, headers) {
-            if (err) {
-                console.log(url, ' failed!');
-            } else {
-                // Save to tmpfile
-                var fname = url + '.pbf';
-                // var fdir = os.tmpdir();
-                var fdir = '/tmp';
-                var fpath = path.join(fdir, fname);
+            if (err) return console.error(url, 'failed!', err);
 
-                mkdirp(path.dirname(fpath), writeFile);
-                function writeFile(err) {
-                    if (err) throw (err);
-                    fs.writeFile(fpath, tile, uploadAndRmFile);
-                }
-                function uploadAndRmFile(err) {
-                    if (err) throw (err);
-                    cmd = 'swift upload ' + bucket + ' -H \'Content-Encoding: gzip\' -H \'Content-Type: application/x-protobuf\' -H \'X-Container-Meta-Access-Control-Allow-Origin: *\' ' + fname;
-                    runCmd(cmd, {cwd: fdir});
-                    fs.unlink(fpath);
-                }
+            // Save to tmpfile
+            var fname = url + '.pbf';
+            var fdir = os.tmpdir();
+            var fpath = path.join(fdir, fname);
 
-                callback(url);
+            mkdirp(path.dirname(fpath), writeFile);
+            function writeFile(err) {
+                if (err) throw (err);
+                fs.writeFile(fpath, tile, uploadAndRmFile);
             }
+            function uploadAndRmFile(err) {
+                if (err) throw (err);
+                cmd = 'swift upload ' + bucket + ' -H \'Content-Encoding: gzip\' -H \'Content-Type: application/x-protobuf\' -H \'X-Container-Meta-Access-Control-Allow-Origin: *\' ' + fname;
+                exec(cmd, {cwd: fdir}, function(error, stdout, stderr) {
+                    if (err || stderr) throw (err || stderr);
+                    fs.unlink(fpath);
+                });
+            }
+            callback(url);
         }
     }
 });
@@ -101,19 +127,7 @@ tilelive.load('tmsource://../tile-server/mapbox_studio.tm2source', function(err,
  * @return {array}        Array of numbers between start and stop, exclusive
  */
 function range(start, stop) {
-    return Array.apply(Array, Array(stop - start)).map(
-        function (_, i) {
-            return i + start;
-        }
+    return Array.apply(Array, Array(Number(stop) - Number(start))).map(
+        function (_, i) { return i + Number(start); }
     );
-}
-
-function runCmd(cmd, opts) {
-    exec(cmd, opts, function(error, stdout, stderr) {
-        // console.log('stdout: ', stdout);
-        // console.log('stderr: ', stderr);
-        // if (error !== null) {
-            // console.log('exec error: ', error);
-        // }
-    });
 }
