@@ -9,7 +9,7 @@
         "ocean-tiles": {
             "type": "vector",
             "tiles": [
-                "http://tiles.alukach.com/bathy/{z}/{x}/{y}.pbf"
+                "https://tiles.alukach.com/bathy/{z}/{x}/{y}.pbf"
             ],
             "minzoom": 0,
             "maxzoom": 4
