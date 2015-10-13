@@ -12,7 +12,7 @@
                 "https://tiles.alukach.com:8080/v1/AUTH_0494f9ea20824c889ad817fc718b43a4/bathy/{z}/{x}/{y}.pbf"
             ],
             "minzoom": 0,
-            "maxzoom": 5
+            "maxzoom": 4
         }
     },
     "glyphs": "https://mapbox.s3.amazonaws.com/gl-glyphs-256/{fontstack}/{range}.pbf",
